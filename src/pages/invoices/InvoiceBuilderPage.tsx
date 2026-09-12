@@ -597,7 +597,20 @@ export function InvoiceBuilderPage() {
             .map((block) => (
               <Card key={block.id}>
                 <CardHeader className="flex flex-row items-center justify-between gap-2">
-                  <CardTitle className="text-base">{block.productNameSnapshot}</CardTitle>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <CardTitle className="text-base">{block.productNameSnapshot}</CardTitle>
+                    <Badge
+                      variant="secondary"
+                      className="tnum"
+                      title={
+                        block.productQuantityFormulaSnapshot
+                          ? `معادلة الكمية (v${block.productQuantityFormulaVersion}): ${block.productQuantityFormulaSnapshot}`
+                          : "لا توجد معادلة كمية — الكمية 1"
+                      }
+                    >
+                      الكمية: {fmtNum(block.productQuantity)}
+                    </Badge>
+                  </div>
                   {isDraft && (
                     <Button
                       variant="ghost"
@@ -625,8 +638,9 @@ export function InvoiceBuilderPage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>الصنف</TableHead>
+                          <TableHead className="text-left">عدد</TableHead>
                           <TableHead className="text-left">سعر الوحدة</TableHead>
-                          <TableHead className="text-left">الكمية</TableHead>
+                          <TableHead className="text-left">اجمالي العدد</TableHead>
                           <TableHead className="text-left">الإجمالي</TableHead>
                           {isDraft && <TableHead className="w-24">الحالة</TableHead>}
                         </TableRow>
@@ -644,8 +658,38 @@ export function InvoiceBuilderPage() {
                                   </p>
                                 )}
                               </TableCell>
-                              <TableCell className="tnum text-left">{fmtMoney(item.unitPriceSnapshot)}</TableCell>
-                              <TableCell className="tnum text-left">{fmtNum(item.quantitySnapshot)}</TableCell>
+                              {(() => {
+                                // formulaResultSnapshot 0 with a nonzero quantity means
+                                // "not recorded" (pre-feature invoice) — don't show
+                                // misleading math in that case.
+                                const recorded =
+                                  item.formulaResultSnapshot !== 0 || item.quantitySnapshot === 0;
+                                return (
+                                  <>
+                                    <TableCell
+                                      className="tnum text-left"
+                                      title={
+                                        recorded
+                                          ? `ناتج معادلة الصنف قبل مضاعف كمية المنتج`
+                                          : "العدد قبل ميزة معادلة الكمية — أعد الحساب لتعبئته"
+                                      }
+                                    >
+                                      {recorded ? fmtNum(item.formulaResultSnapshot) : "—"}
+                                    </TableCell>
+                                    <TableCell className="tnum text-left">{fmtMoney(item.unitPriceSnapshot)}</TableCell>
+                                    <TableCell
+                                      className="tnum text-left"
+                                      title={
+                                        recorded
+                                          ? `ناتج المعادلة ${fmtNum(item.formulaResultSnapshot)} × كمية المنتج ${fmtNum(block.productQuantity)}`
+                                          : "الكمية قبل ميزة معادلة الكمية — أعد الحساب لتعبئتها"
+                                      }
+                                    >
+                                      {fmtNum(item.quantitySnapshot)}
+                                    </TableCell>
+                                  </>
+                                );
+                              })()}
                               <TableCell className="tnum text-left font-semibold">
                                 {fmtMoney(item.totalPriceSnapshot)}
                               </TableCell>

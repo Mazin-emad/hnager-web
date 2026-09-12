@@ -52,6 +52,27 @@ export interface ParsedApiError {
   status?: number;
 }
 
+/**
+ * Raw server detail for application errors: `errors[1]` in
+ * `{ errors: [code, description] }`. Used under the formula editors where the
+ * spec requires showing the server message verbatim (it names the bad key for
+ * Formula.ValidationFailed). Returns undefined when absent.
+ */
+export function getServerErrorDetail(error: unknown): string | undefined {
+  if (!axios.isAxiosError(error)) return undefined;
+  const data = axiosErrorData(error);
+  if (data && Array.isArray(data.errors)) {
+    const description = (data.errors as unknown[])[1];
+    if (typeof description === "string" && description.trim()) return description;
+  }
+  return undefined;
+}
+
+function axiosErrorData(error: AxiosError): Record<string, unknown> | undefined {
+  const data = (error as AxiosError<unknown>).response?.data;
+  return typeof data === "object" && data != null ? (data as Record<string, unknown>) : undefined;
+}
+
 /** Single place that understands both API error shapes. */
 export function parseApiError(error: unknown): ParsedApiError {
   if (!axios.isAxiosError(error)) {

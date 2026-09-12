@@ -192,6 +192,10 @@ export interface ProductDetailResponse {
   description: string | null;
   isActive: boolean;
   displayOrder: number;
+  /** Quantity formula text; null = never configured (invoices compute with 1). */
+  quantityExpression: string | null;
+  /** 0 = never configured; increments on each real change. */
+  quantityFormulaVersion: number;
   variables: AssignedProductVariable[];
   items: ItemDetailResponse[];
 }
@@ -240,6 +244,20 @@ export interface EvaluateFormulaResponse {
   result: number;
 }
 
+// ── Product quantity formula (backend-calculated product quantity) ──────────
+
+/** GET /api/v1/products/{id}/quantity-formula. expression null + version 0 = never configured. */
+export interface QuantityFormulaResponse {
+  productId: string;
+  expression: string | null;
+  version: number;
+}
+
+/** PUT /api/v1/products/{id}/quantity-formula. May reference only assigned variables. */
+export interface UpsertQuantityFormulaRequest {
+  expression: string;
+}
+
 // ── Invoices ────────────────────────────────────────────────────────────────
 
 export interface InvoiceListItem {
@@ -284,6 +302,15 @@ export interface InvoiceItemSnapshot {
   unitPriceSnapshot: number;
   formulaSnapshot: string | null;
   formulaVersion: number | null;
+  /**
+   * Raw item-formula result BEFORE the product-quantity multiplier (4dp).
+   * `0` on pre-feature invoices means "not recorded", not a real zero.
+   */
+  formulaResultSnapshot: number;
+  /**
+   * Total billable quantity = formulaResultSnapshot × productQuantity.
+   * (Meaning changed by the backend quantity-formula feature.)
+   */
   quantitySnapshot: number;
   totalPriceSnapshot: number;
   displayOrder: number;
@@ -294,6 +321,12 @@ export interface InvoiceProductBlock {
   productId: string;
   productNameSnapshot: string;
   displayOrder: number;
+  /** Backend-evaluated QuantityFormula(variable values). Read-only display. */
+  productQuantity: number;
+  /** Formula text used for this invoice; "" if none was set at the time. */
+  productQuantityFormulaSnapshot: string;
+  /** 0 if no formula was set at the time. */
+  productQuantityFormulaVersion: number;
   inputValues: InvoiceInputValue[];
   items: InvoiceItemSnapshot[];
 }

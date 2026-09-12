@@ -5,15 +5,18 @@ import type {
   ItemDetailResponse,
   ProductDetailResponse,
   ProductSummaryResponse,
+  QuantityFormulaResponse,
   SetProductVariablesRequest,
   UpdateItemRequest,
   UpdateProductRequest,
+  UpsertQuantityFormulaRequest,
 } from "./types";
 
 export const productKeys = {
   all: (activeOnly: boolean) => ["products", activeOnly] as const,
   detail: (id: string) => ["products", id] as const,
   configuration: (id: string) => ["products", id, "configuration"] as const,
+  quantityFormula: (id: string) => ["products", id, "quantity-formula"] as const,
   items: (productId: string, activeOnly: boolean) =>
     ["products", productId, "items", activeOnly] as const,
 };
@@ -58,6 +61,24 @@ export async function setProductVariables(
   body: SetProductVariablesRequest,
 ): Promise<void> {
   await api.put(`/api/v1/products/${id}/variables`, body);
+}
+
+/** Current quantity formula for the product settings page (prefill the editor). */
+export async function getQuantityFormula(id: string): Promise<QuantityFormulaResponse> {
+  const res = await api.get<QuantityFormulaResponse>(`/api/v1/products/${id}/quantity-formula`);
+  return res.data;
+}
+
+/** Admin "Save formula" — returns the saved shape with bumped version on real change. */
+export async function updateQuantityFormula(
+  id: string,
+  body: UpsertQuantityFormulaRequest,
+): Promise<QuantityFormulaResponse> {
+  const res = await api.put<QuantityFormulaResponse>(
+    `/api/v1/products/${id}/quantity-formula`,
+    body,
+  );
+  return res.data;
 }
 
 export async function listItems(

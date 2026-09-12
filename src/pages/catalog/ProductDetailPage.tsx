@@ -30,7 +30,13 @@ import { parseApiError } from "@/api/errors";
 import type { AssignedProductVariable, ItemDetailResponse } from "@/api/types";
 import { useAuth } from "@/auth/AuthContext";
 import { FormulaEditor } from "@/components/formula/FormulaEditor";
-import { EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
+import { QuantityFormulaEditor } from "@/components/formula/QuantityFormulaEditor";
+import {
+  EmptyState,
+  ErrorCard,
+  PageHeader,
+  TableSkeleton,
+} from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,7 +115,9 @@ function ItemDialog({
         unitPrice: values.unitPrice,
         displayOrder: values.displayOrder,
       };
-      return isEdit ? updateItem(productId, item.id, body) : createItem(productId, body);
+      return isEdit
+        ? updateItem(productId, item.id, body)
+        : createItem(productId, body);
     },
     onSuccess: () => {
       toast.success(isEdit ? "تم حفظ الصنف" : "تم إنشاء الصنف");
@@ -126,7 +134,10 @@ function ItemDialog({
           <DialogTitle>{isEdit ? "تعديل الصنف" : "صنف جديد"}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
+          <form
+            onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
+            className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="name"
@@ -148,7 +159,12 @@ function ItemDialog({
                   <FormItem>
                     <FormLabel>الكود (اختياري)</FormLabel>
                     <FormControl>
-                      <Input {...field} dir="ltr" placeholder="GL-01" className="tnum text-left" />
+                      <Input
+                        {...field}
+                        dir="ltr"
+                        placeholder="GL-01"
+                        className="tnum text-left"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -159,9 +175,16 @@ function ItemDialog({
                 name="unitPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>سعر الوحدة</FormLabel>
+                    <FormLabel>السعر</FormLabel>
                     <FormControl>
-                      <Input {...field} type="number" min={0} step="any" inputMode="decimal" className="tnum" />
+                      <Input
+                        {...field}
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        className="tnum"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -175,14 +198,24 @@ function ItemDialog({
                 <FormItem>
                   <FormLabel>الترتيب</FormLabel>
                   <FormControl>
-                    <Input {...field} type="number" min={0} inputMode="numeric" className="tnum" />
+                    <Input
+                      {...field}
+                      type="number"
+                      min={0}
+                      inputMode="numeric"
+                      className="tnum"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={mutation.isPending} className="bg-brand-800 hover:bg-brand-900">
+              <Button
+                type="submit"
+                disabled={mutation.isPending}
+                className="bg-brand-800 hover:bg-brand-900"
+              >
                 {mutation.isPending ? "جارٍ الحفظ…" : "حفظ"}
               </Button>
             </DialogFooter>
@@ -202,11 +235,17 @@ export function ProductDetailPage() {
 
   const [showInactiveItems, setShowInactiveItems] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState<ItemDetailResponse | undefined>(undefined);
-  const [formulaItem, setFormulaItem] = useState<ItemDetailResponse | null>(null);
+  const [editingItem, setEditingItem] = useState<
+    ItemDetailResponse | undefined
+  >(undefined);
+  const [formulaItem, setFormulaItem] = useState<ItemDetailResponse | null>(
+    null,
+  );
 
   // Variable-assignment draft (admin editing state)
-  const [draftVars, setDraftVars] = useState<AssignedProductVariable[] | null>(null);
+  const [draftVars, setDraftVars] = useState<AssignedProductVariable[] | null>(
+    null,
+  );
   const [varsDirty, setVarsDirty] = useState(false);
   const [addVarId, setAddVarId] = useState("");
 
@@ -228,7 +267,9 @@ export function ProductDetailPage() {
   useEffect(() => {
     if (productQuery.data && draftVars == null) {
       setDraftVars(
-        [...productQuery.data.variables].sort((a, b) => a.displayOrder - b.displayOrder),
+        [...productQuery.data.variables].sort(
+          (a, b) => a.displayOrder - b.displayOrder,
+        ),
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -293,9 +334,13 @@ export function ProductDetailPage() {
   }
 
   const product = productQuery.data;
-  const items = [...(itemsQuery.data ?? [])].sort((a, b) => a.displayOrder - b.displayOrder);
+  const items = [...(itemsQuery.data ?? [])].sort(
+    (a, b) => a.displayOrder - b.displayOrder,
+  );
   const assignedIds = new Set((draftVars ?? []).map((v) => v.variableId));
-  const unassigned = (catalogQuery.data ?? []).filter((v) => !assignedIds.has(v.id));
+  const unassigned = (catalogQuery.data ?? []).filter(
+    (v) => !assignedIds.has(v.id),
+  );
 
   return (
     <div>
@@ -339,7 +384,9 @@ export function ProductDetailPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           {(draftVars ?? []).length === 0 && (
-            <p className="text-sm text-muted-foreground">لا توجد متغيرات مسندة لهذا المنتج.</p>
+            <p className="text-sm text-muted-foreground">
+              لا توجد متغيرات مسندة لهذا المنتج.
+            </p>
           )}
           {(draftVars ?? []).map((v, index) => {
             return (
@@ -347,11 +394,14 @@ export function ProductDetailPage() {
                 key={v.variableId}
                 className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3"
               >
-                <span className="tnum text-xs text-muted-foreground">{index + 1}</span>
+                <span className="tnum text-xs text-muted-foreground">
+                  {index + 1}
+                </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{v.name}</p>
                   <p className="tnum text-xs text-muted-foreground" dir="ltr">
-                    {v.key}{v.unit ? ` · ${v.unit}` : ""}
+                    {v.key}
+                    {v.unit ? ` · ${v.unit}` : ""}
                   </p>
                 </div>
                 {isAdmin ? (
@@ -361,10 +411,13 @@ export function ProductDetailPage() {
                         type="checkbox"
                         checked={v.isRequired}
                         onChange={(e) => {
-                          setDraftVars((vars) =>
-                            vars?.map((x) =>
-                              x.variableId === v.variableId ? { ...x, isRequired: e.target.checked } : x,
-                            ) ?? null,
+                          setDraftVars(
+                            (vars) =>
+                              vars?.map((x) =>
+                                x.variableId === v.variableId
+                                  ? { ...x, isRequired: e.target.checked }
+                                  : x,
+                              ) ?? null,
                           );
                           setVarsDirty(true);
                         }}
@@ -373,10 +426,24 @@ export function ProductDetailPage() {
                       مطلوب
                     </label>
                     <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="size-8" disabled={index === 0} onClick={() => moveVar(index, -1)} aria-label="تحريك لأعلى">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        disabled={index === 0}
+                        onClick={() => moveVar(index, -1)}
+                        aria-label="تحريك لأعلى"
+                      >
                         <ArrowUp className="size-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="size-8" disabled={index === (draftVars?.length ?? 1) - 1} onClick={() => moveVar(index, 1)} aria-label="تحريك لأسفل">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        disabled={index === (draftVars?.length ?? 1) - 1}
+                        onClick={() => moveVar(index, 1)}
+                        aria-label="تحريك لأسفل"
+                      >
                         <ArrowDown className="size-4" />
                       </Button>
                       <Button
@@ -384,7 +451,12 @@ export function ProductDetailPage() {
                         size="icon"
                         className="size-8 text-destructive"
                         onClick={() => {
-                          setDraftVars((vars) => vars?.filter((x) => x.variableId !== v.variableId) ?? null);
+                          setDraftVars(
+                            (vars) =>
+                              vars?.filter(
+                                (x) => x.variableId !== v.variableId,
+                              ) ?? null,
+                          );
                           setVarsDirty(true);
                         }}
                         aria-label="إزالة"
@@ -401,9 +473,18 @@ export function ProductDetailPage() {
           })}
           {isAdmin && (
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Select value={addVarId} onValueChange={(v) => setAddVarId(v as string)}>
+              <Select
+                value={addVarId}
+                onValueChange={(v) => setAddVarId(v as string)}
+              >
                 <SelectTrigger className="flex-1">
-                  <SelectValue placeholder={catalogQuery.isPending ? "جارٍ تحميل المتغيرات…" : "إضافة متغير من الكتالوج"} />
+                  <SelectValue
+                    placeholder={
+                      catalogQuery.isPending
+                        ? "جارٍ تحميل المتغيرات…"
+                        : "إضافة متغير من الكتالوج"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {unassigned.map((v) => (
@@ -417,7 +498,9 @@ export function ProductDetailPage() {
                 variant="outline"
                 disabled={!addVarId}
                 onClick={() => {
-                  const found = (catalogQuery.data ?? []).find((v) => v.id === addVarId);
+                  const found = (catalogQuery.data ?? []).find(
+                    (v) => v.id === addVarId,
+                  );
                   if (!found) return;
                   setDraftVars((vars) => [
                     ...(vars ?? []),
@@ -443,12 +526,37 @@ export function ProductDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Quantity formula (backend-calculated product quantity) */}
+      <Card className="mb-4">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-lg">معادلة الكمية</CardTitle>
+          {product.quantityFormulaVersion > 0 && (
+            <Badge variant="secondary" className="tnum" dir="ltr">
+              v{product.quantityFormulaVersion}
+            </Badge>
+          )}
+        </CardHeader>
+        <CardContent>
+          <QuantityFormulaEditor
+            productId={id}
+            variables={[...product.variables].sort(
+              (a, b) => a.displayOrder - b.displayOrder,
+            )}
+            readOnly={!isAdmin}
+          />
+        </CardContent>
+      </Card>
+
       {/* Items */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg">الأصناف</CardTitle>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowInactiveItems((v) => !v)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowInactiveItems((v) => !v)}
+            >
               {showInactiveItems ? "إخفاء المعطّلة" : "عرض المعطّلة"}
             </Button>
             {isAdmin && (
@@ -468,14 +576,22 @@ export function ProductDetailPage() {
         </CardHeader>
         <CardContent className="p-0">
           {itemsQuery.isPending ? (
-            <div className="p-6"><TableSkeleton rows={4} cols={4} /></div>
+            <div className="p-6">
+              <TableSkeleton rows={4} cols={4} />
+            </div>
           ) : itemsQuery.isError ? (
             <div className="p-6">
-              <ErrorCard message={parseApiError(itemsQuery.error).message} onRetry={() => itemsQuery.refetch()} />
+              <ErrorCard
+                message={parseApiError(itemsQuery.error).message}
+                onRetry={() => itemsQuery.refetch()}
+              />
             </div>
           ) : items.length === 0 ? (
             <div className="p-6">
-              <EmptyState title="لا توجد أصناف" hint="أضف أول صنف ثم عرّف معادلته" />
+              <EmptyState
+                title="لا توجد أصناف"
+                hint="أضف أول صنف ثم عرّف معادلته"
+              />
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -494,23 +610,42 @@ export function ProductDetailPage() {
                     <TableRow key={item.id}>
                       <TableCell>
                         <p className="font-medium">{item.name}</p>
-                        {item.code && <p className="tnum text-xs text-muted-foreground" dir="ltr">{item.code}</p>}
+                        {item.code && (
+                          <p
+                            className="tnum text-xs text-muted-foreground"
+                            dir="ltr"
+                          >
+                            {item.code}
+                          </p>
+                        )}
                       </TableCell>
-                      <TableCell className="tnum">{fmtMoney(item.unitPrice)}</TableCell>
+                      <TableCell className="tnum">
+                        {fmtMoney(item.unitPrice)}
+                      </TableCell>
                       <TableCell>
                         {item.formula ? (
                           <span className="flex items-center gap-1.5">
-                            <code className="tnum max-w-48 truncate rounded bg-brand-100 px-2 py-0.5 font-mono text-xs text-brand-900" dir="ltr" title={item.formula.expression}>
+                            <code
+                              className="tnum max-w-48 truncate rounded bg-brand-100 px-2 py-0.5 font-mono text-xs text-brand-900"
+                              dir="ltr"
+                              title={item.formula.expression}
+                            >
                               {item.formula.expression}
                             </code>
-                            <span className="tnum text-xs text-muted-foreground">v{item.formula.version}</span>
+                            <span className="tnum text-xs text-muted-foreground">
+                              v{item.formula.version}
+                            </span>
                           </span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">بلا معادلة</span>
+                          <span className="text-xs text-muted-foreground">
+                            بلا معادلة
+                          </span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={item.isActive ? "default" : "secondary"}>
+                        <Badge
+                          variant={item.isActive ? "default" : "secondary"}
+                        >
                           {item.isActive ? "نشط" : "معطّل"}
                         </Badge>
                       </TableCell>
@@ -569,7 +704,10 @@ export function ProductDetailPage() {
         }}
       />
 
-      <Dialog open={formulaItem != null} onOpenChange={(o) => !o && setFormulaItem(null)}>
+      <Dialog
+        open={formulaItem != null}
+        onOpenChange={(o) => !o && setFormulaItem(null)}
+      >
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>معادلة الصنف</DialogTitle>
@@ -584,7 +722,9 @@ export function ProductDetailPage() {
                 (a, b) => a.displayOrder - b.displayOrder,
               )}
               onSaved={() => {
-                void queryClient.invalidateQueries({ queryKey: ["products", id] });
+                void queryClient.invalidateQueries({
+                  queryKey: ["products", id],
+                });
               }}
             />
           )}
