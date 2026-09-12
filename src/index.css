@@ -35,13 +35,56 @@
   --color-paper-dark: #f3ecdb;
 }
 
+/*
+ * Semantic color mappings (shadcn/ui contract).
+ * Without these, utilities like bg-popover / text-muted-foreground /
+ * border-input compile to NOTHING, leaving dialogs transparent.
+ * `inline` keeps utilities referencing var(--...) at runtime so the
+ * :root tokens below stay the single source of truth (incl. portals).
+ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-heading: var(--font-sans);
+}
+
 @layer base {
   :root {
     --background: #fbf6ea;
     --foreground: #1c2620;
     --card: #fffdf7;
     --card-foreground: #1c2620;
-    --popover: #fffdf7;
+    --popover: #ffffff;
     --popover-foreground: #1c2620;
     --primary: #24402f;
     --primary-foreground: #fbf6ea;
@@ -52,8 +95,12 @@
     --accent: #f3e5d3;
     --accent-foreground: #77341d;
     --destructive: #b3261e;
-    --border: #e3d9c2;
-    --input: #d8cdae;
+    /* Border/input must stay ≥3:1 against white popovers AND paper pages
+     * so dialog edges and form controls never wash out.
+     * #c9b98f ≈ 1.9:1 decorative edge (visible without shouting);
+     * #998a5e ≈ 3.4:1 on white — passes WCAG non-text contrast for inputs. */
+    --border: #c9b98f;
+    --input: #998a5e;
     --ring: #385f42;
     --radius: 0.625rem;
     --sidebar: #0f1f16;
@@ -87,4 +134,42 @@
     direction: ltr;
     unicode-bidi: embed;
   }
+}
+
+/*
+ * Dialog/portal legibility safeguards (UNLAYERED on purpose: unlayered CSS
+ * beats Tailwind's layered `bg-transparent` utility, so dialog inputs keep
+ * their paper fill instead of going transparent on the white surface).
+ * Portals mount under <body>, so :root tokens apply in every dialog —
+ * these declarations additionally guarantee opaque surfaces and legible
+ * text even if a utility ever fails to compile.
+ */
+[data-slot="dialog-content"],
+[data-slot="alert-dialog-content"] {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  border-color: var(--border);
+}
+
+[data-slot="dialog-content"] [data-slot="input"],
+[data-slot="dialog-content"] [data-slot="select-trigger"],
+[data-slot="dialog-content"] textarea,
+[data-slot="alert-dialog-content"] [data-slot="input"],
+[data-slot="alert-dialog-content"] [data-slot="select-trigger"],
+[data-slot="alert-dialog-content"] textarea {
+  /* Paper fill on the white dialog surface = clear inset affordance. */
+  background-color: var(--background);
+  color: var(--foreground);
+  border-color: var(--input);
+  color-scheme: light;
+}
+
+[data-slot="dialog-title"],
+[data-slot="alert-dialog-title"] {
+  color: var(--popover-foreground);
+}
+[data-slot="dialog-description"],
+[data-slot="alert-dialog-description"] {
+  /* #6b6a5e on white ≈ 5.5:1 — passes body-text contrast. */
+  color: var(--muted-foreground);
 }

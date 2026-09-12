@@ -363,7 +363,7 @@ export function InvoiceListPage() {
               className="tnum"
               aria-label="إلى تاريخ"
             />
-            <Button onClick={applySearch} className="col-span-2 bg-brand-800 hover:bg-brand-900 sm:col-span-1">
+            <Button onClick={applySearch} className="col-span-2 text-white bg-brand-800 hover:bg-brand-900 sm:col-span-1">
               بحث
             </Button>
           </div>

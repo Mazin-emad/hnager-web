@@ -34,6 +34,10 @@ const RolesPage = lazy(() =>
 const AccountPage = lazy(() =>
   import("@/pages/AccountPage").then((m) => ({ default: m.AccountPage })),
 );
+// TEMPORARY visual-contrast harness — deleted before publish.
+const VisualPage = lazy(() =>
+  import("@/pages/__Visual").then((m) => ({ default: m.VisualPage })),
+);
 
 function NotFoundPage() {
   const navigate = useNavigate();
@@ -53,6 +57,8 @@ export function App() {
     <Suspense fallback={<SplashScreen />}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* TEMPORARY visual-contrast harness — deleted before publish. */}
+        <Route path="/__visual" element={<VisualPage />} />
         <Route
           element={
             <RequireAuth>

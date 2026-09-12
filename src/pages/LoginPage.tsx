@@ -198,7 +198,7 @@ export function LoginPage() {
                 />
                 <Button
                   type="submit"
-                  className="w-full bg-brand-800 hover:bg-brand-900"
+                  className="w-full text-white  bg-brand-800 hover:bg-brand-900"
                   disabled={busy}
                 >
                   {busy ? "جارٍ تسجيل الدخول…" : "دخول"}

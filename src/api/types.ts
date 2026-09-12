@@ -163,15 +163,14 @@ export interface SetProductVariablesRequest {
 
 /**
  * One assigned variable on a product detail/configuration response.
- * The documented contract guarantees variableId/isRequired/displayOrder;
- * the API also embeds variable display data (key/name/unit) — both are
- * optional here so the UI can fall back to the variables catalog.
+ * Exact server shape (confirmed): embedded name/key/dataType/unit.
  */
 export interface AssignedProductVariable {
   variableId: string;
-  variableKey?: string;
-  variableName?: string;
-  unit?: string | null;
+  name: string;
+  key: string;
+  dataType: VariableType;
+  unit: string | null;
   isRequired: boolean;
   displayOrder: number;
 }

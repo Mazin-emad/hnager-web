@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -106,10 +107,12 @@ function UserMenu() {
         }
       />
       <DropdownMenuContent align="end" className="w-52">
-        <DropdownMenuLabel className="font-normal">
-          <p className="text-sm font-semibold">{user?.firstName} {user?.lastName}</p>
-          <p className="tnum truncate text-xs text-muted-foreground" dir="ltr">{user?.email}</p>
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="font-normal">
+            <p className="text-sm font-semibold">{user?.firstName} {user?.lastName}</p>
+            <p className="tnum truncate text-xs text-muted-foreground" dir="ltr">{user?.email}</p>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate("/account")}>
           <UserCircle className="size-4" />

@@ -76,7 +76,7 @@ export function FormulaEditor({
       const sampleValues: Record<string, number> = {};
       for (const v of variables) {
         const raw = (samples[v.variableId] ?? "").trim();
-        if (raw !== "" && v.variableKey) sampleValues[v.variableKey] = Number(raw);
+        if (raw !== "") sampleValues[v.key] = Number(raw);
       }
       return evaluateFormula({ expression: expression.trim(), productId, sampleValues });
     },
@@ -94,7 +94,7 @@ export function FormulaEditor({
     onError: (error) => toast.error(parseApiError(error).message),
   });
 
-  const variableKeys = variables.map((v) => v.variableKey).filter((k): k is string => !!k);
+  const variableKeys = variables.map((v) => v.key);
 
   return (
     <div className="space-y-4">
@@ -176,7 +176,7 @@ export function FormulaEditor({
             {variables.map((v) => (
               <div key={v.variableId} className="space-y-1">
                 <Label htmlFor={`sample-${v.variableId}`} className="text-xs">
-                  {v.variableName ?? v.variableKey}
+                  {v.name}
                   {v.unit ? ` (${v.unit})` : ""}
                 </Label>
                 <Input

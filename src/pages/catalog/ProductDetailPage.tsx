@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -225,23 +225,6 @@ export function ProductDetailPage() {
     queryFn: () => listVariables(false),
   });
 
-  const catalogById = useMemo(() => {
-    const map = new Map<string, { key: string; name: string; unit: string | null }>();
-    for (const v of catalogQuery.data ?? []) {
-      map.set(v.id, { key: v.key, name: v.name, unit: v.unit });
-    }
-    return map;
-  }, [catalogQuery.data]);
-
-  function displayVar(v: AssignedProductVariable): { key: string; name: string; unit: string | null } {
-    const fromCatalog = catalogById.get(v.variableId);
-    return {
-      key: v.variableKey ?? fromCatalog?.key ?? v.variableId.slice(0, 8),
-      name: v.variableName ?? fromCatalog?.name ?? "متغير",
-      unit: v.unit ?? fromCatalog?.unit ?? null,
-    };
-  }
-
   useEffect(() => {
     if (productQuery.data && draftVars == null) {
       setDraftVars(
@@ -359,7 +342,6 @@ export function ProductDetailPage() {
             <p className="text-sm text-muted-foreground">لا توجد متغيرات مسندة لهذا المنتج.</p>
           )}
           {(draftVars ?? []).map((v, index) => {
-            const d = displayVar(v);
             return (
               <div
                 key={v.variableId}
@@ -367,9 +349,9 @@ export function ProductDetailPage() {
               >
                 <span className="tnum text-xs text-muted-foreground">{index + 1}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{d.name}</p>
+                  <p className="font-medium">{v.name}</p>
                   <p className="tnum text-xs text-muted-foreground" dir="ltr">
-                    {d.key}{d.unit ? ` · ${d.unit}` : ""}
+                    {v.key}{v.unit ? ` · ${v.unit}` : ""}
                   </p>
                 </div>
                 {isAdmin ? (
@@ -441,8 +423,9 @@ export function ProductDetailPage() {
                     ...(vars ?? []),
                     {
                       variableId: found.id,
-                      variableKey: found.key,
-                      variableName: found.name,
+                      name: found.name,
+                      key: found.key,
+                      dataType: found.dataType,
                       unit: found.unit,
                       isRequired: true,
                       displayOrder: vars?.length ?? 0,

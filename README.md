@@ -53,9 +53,8 @@ origin (CORS) and stay reachable over HTTPS.
 - Role/permission UI gating reads JWT claims (`role`/`roles`, `permission`/
   `permissions`, incl. .NET long claim names); Admins pass all checks.
   The API enforces authorization server-side — UI gating is display-only.
-- `GET /api/v1/products/{id}` / `configuration` variable entries: the code
-  accepts embedded `variableKey/variableName/unit` and falls back to the
-  variables catalog by `variableId` (`displayVar` in `ProductDetailPage`).
-  If the server's embedding differs, adjust `AssignedProductVariable` in
-  `src/api/types.ts`.
+- `GET /api/v1/products/{id}` and `/configuration` return `ProductDetailResponse`
+  with embedded variable entries
+  (`{ variableId, name, key, dataType, unit, isRequired, displayOrder }`) —
+  confirmed against a live sample; typed exactly in `src/api/types.ts`.
 - `docs/openapi.json` is a snapshot of the live OpenAPI spec for reference.

@@ -131,16 +131,16 @@ function AddProductDialog({ invoiceId }: { invoiceId: string }) {
     if (!productId) return;
     const missing = variables.filter((v) => v.isRequired && (values[v.variableId] ?? "").trim() === "");
     if (missing.length > 0) {
-      toast.error(`أدخل القيم المطلوبة: ${missing.map((v) => v.variableName ?? v.variableKey ?? "؟").join("، ")}`);
+      toast.error(`أدخل القيم المطلوبة: ${missing.map((v) => v.name).join("، ")}`);
       return;
     }
     const inputValues = variables
       .filter((v) => (values[v.variableId] ?? "").trim() !== "")
       .map((v) => ({
-        variableKey: v.variableKey ?? "",
+        variableKey: v.key,
         value: Number(values[v.variableId]),
       }))
-      .filter((iv) => iv.variableKey && !Number.isNaN(iv.value));
+      .filter((iv) => !Number.isNaN(iv.value));
     addMutation.mutate({ productId, inputValues });
   }
 
@@ -204,7 +204,7 @@ function AddProductDialog({ invoiceId }: { invoiceId: string }) {
           {variables.map((v) => (
             <div key={v.variableId} className="space-y-2">
               <Label htmlFor={`var-${v.variableId}`}>
-                {v.variableName ?? v.variableKey}
+                {v.name}
                 {v.isRequired && <span className="text-destructive"> *</span>}
                 {v.unit && <span className="text-xs text-muted-foreground"> ({v.unit})</span>}
               </Label>
