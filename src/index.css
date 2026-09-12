@@ -1,0 +1,90 @@
+﻿@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme {
+  --font-sans: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, system-ui, sans-serif;
+
+  /* Brand green — sampled from the Hangar Al-Nobel logo */
+  --color-brand-50: #f2f6f1;
+  --color-brand-100: #e0eae1;
+  --color-brand-200: #c3d6c5;
+  --color-brand-300: #98b89d;
+  --color-brand-400: #6b9574;
+  --color-brand-500: #4b7855;
+  --color-brand-600: #385f42;
+  --color-brand-700: #2d4c36;
+  --color-brand-800: #24402f;
+  --color-brand-900: #1e3528;
+  --color-brand-950: #0f1f16;
+
+  /* Clay/bronze accent */
+  --color-clay-50: #faf4ec;
+  --color-clay-100: #f3e5d3;
+  --color-clay-200: #e6c9a2;
+  --color-clay-300: #d7a76f;
+  --color-clay-400: #c98a49;
+  --color-clay-500: #c0732f;
+  --color-clay-600: #b5541f;
+  --color-clay-700: #93401a;
+  --color-clay-800: #77341d;
+  --color-clay-900: #622c1a;
+
+  /* Warm paper background */
+  --color-paper: #fbf6ea;
+  --color-paper-dark: #f3ecdb;
+}
+
+@layer base {
+  :root {
+    --background: #fbf6ea;
+    --foreground: #1c2620;
+    --card: #fffdf7;
+    --card-foreground: #1c2620;
+    --popover: #fffdf7;
+    --popover-foreground: #1c2620;
+    --primary: #24402f;
+    --primary-foreground: #fbf6ea;
+    --secondary: #e7ede4;
+    --secondary-foreground: #24402f;
+    --muted: #f0e9d8;
+    --muted-foreground: #6b6a5e;
+    --accent: #f3e5d3;
+    --accent-foreground: #77341d;
+    --destructive: #b3261e;
+    --border: #e3d9c2;
+    --input: #d8cdae;
+    --ring: #385f42;
+    --radius: 0.625rem;
+    --sidebar: #0f1f16;
+    --sidebar-foreground: #fbf6ea;
+    --sidebar-primary: #d7a76f;
+    --sidebar-primary-foreground: #0f1f16;
+    --sidebar-accent: #1e3528;
+    --sidebar-accent-foreground: #fbf6ea;
+    --sidebar-border: #24402f;
+    --sidebar-ring: #d7a76f;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    font-family: var(--font-sans);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    /* Arabic script needs taller line boxes than Latin defaults */
+    line-height: 1.9;
+  }
+
+  /* Western digits, tabular for stable invoice tables */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    unicode-bidi: embed;
+  }
+}
