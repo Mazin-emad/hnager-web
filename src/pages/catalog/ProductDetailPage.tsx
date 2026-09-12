@@ -483,7 +483,7 @@ export function ProductDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>الاسم</TableHead>
-                    <TableHead className="text-left">السعر</TableHead>
+                    <TableHead>السعر</TableHead>
                     <TableHead>المعادلة</TableHead>
                     <TableHead>الحالة</TableHead>
                     {isAdmin && <TableHead className="w-40">إجراءات</TableHead>}
@@ -496,7 +496,7 @@ export function ProductDetailPage() {
                         <p className="font-medium">{item.name}</p>
                         {item.code && <p className="tnum text-xs text-muted-foreground" dir="ltr">{item.code}</p>}
                       </TableCell>
-                      <TableCell className="tnum text-left">{fmtMoney(item.unitPrice)}</TableCell>
+                      <TableCell className="tnum">{fmtMoney(item.unitPrice)}</TableCell>
                       <TableCell>
                         {item.formula ? (
                           <span className="flex items-center gap-1.5">

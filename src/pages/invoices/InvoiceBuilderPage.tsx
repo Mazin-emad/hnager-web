@@ -31,7 +31,7 @@ import {
 } from "@/api/invoices";
 import { getProductConfiguration, listProducts, productKeys } from "@/api/products";
 import { parseApiError } from "@/api/errors";
-import type { InvoiceDetailResponse, InvoiceType } from "@/api/types";
+import type { AddInvoiceProductRequest, InvoiceDetailResponse, InvoiceType } from "@/api/types";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS } from "@/lib/labels";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum } from "@/lib/format";
 import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
@@ -110,7 +110,10 @@ function AddProductDialog({ invoiceId }: { invoiceId: string }) {
   });
 
   const addMutation = useMutation({
-    mutationFn: (body: { productId: string; inputValues: { variableKey: string; value: number }[] }) =>
+    // Locked to the API contract: AddInvoiceProductRequest requires
+    // { productId, inputValues: [{ variableKey, value }] } — omitting
+    // inputValues is a type error, not a silent runtime drop.
+    mutationFn: (body: AddInvoiceProductRequest) =>
       addInvoiceProduct(invoiceId, body),
     onSuccess: () => {
       toast.success("تمت إضافة المنتج");
