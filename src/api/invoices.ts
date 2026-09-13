@@ -80,9 +80,14 @@ export async function finalizeInvoice(id: string): Promise<InvoiceDetailResponse
   return res.data;
 }
 
-export async function downloadInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
+/** Shared PDF fetch (blob) — used by both download and print so the API call isn't duplicated. */
+export async function fetchInvoicePdfBlob(id: string): Promise<Blob> {
   const res = await api.get(`/api/v1/invoices/${id}/pdf`, { responseType: "blob" });
-  const blob = new Blob([res.data], { type: "application/pdf" });
+  return new Blob([res.data], { type: "application/pdf" });
+}
+
+export async function downloadInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
+  const blob = await fetchInvoicePdfBlob(id);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;

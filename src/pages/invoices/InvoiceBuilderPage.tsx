@@ -15,12 +15,14 @@ import {
   PackagePlus,
   Pencil,
   Receipt,
+  Printer,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   addInvoiceProduct,
   downloadInvoicePdf,
+  fetchInvoicePdfBlob,
   finalizeInvoice,
   getInvoice,
   invoiceKeys,
@@ -88,6 +90,25 @@ const WEEKDAYS = ["Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thurs
 
 function includedItemCount(invoice: InvoiceDetailResponse): number {
   return invoice.products.flatMap((p) => p.items).filter((i) => !i.isExcluded).length;
+}
+
+/** Safari (desktop + iOS) is unreliable with hidden-iframe PDF printing. */
+function isSafariBrowser(): boolean {
+  const ua = navigator.userAgent;
+  return /Safari/.test(ua) && !/Chrome|Chromium|Android/.test(ua);
+}
+
+/**
+ * Last-resort fallback: open an already-fetched PDF object URL in a new tab.
+ * Returns false when the popup was blocked (caller should toast instead).
+ */
+function openPdfInNewTab(url: string | null): boolean {
+  if (!url) return false;
+  const tab = window.open(url, "_blank");
+  if (!tab) return false;
+  // Keep the URL alive while the user prints manually from the viewer.
+  setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
+  return true;
 }
 
 // ── Add-product dialog ──────────────────────────────────────────────────────
@@ -427,6 +448,7 @@ export function InvoiceBuilderPage() {
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [printBusy, setPrintBusy] = useState(false);
 
   const invoiceQuery = useQuery({
     queryKey: invoiceKeys.detail(id),
@@ -485,6 +507,86 @@ export function InvoiceBuilderPage() {
     }
   }
 
+  async function handlePrint(invoice: InvoiceDetailResponse) {
+    // Safari is unreliable with hidden-iframe printing — send those users
+    // straight to the built-in PDF viewer so they can print manually.
+    if (isSafariBrowser()) {
+      await handlePrintViaTab(invoice, null);
+      return;
+    }
+    setPrintBusy(true);
+    let url: string | null = null;
+    let iframe: HTMLIFrameElement | null = null;
+    // Safety net: never leave a hidden iframe / object URL behind if
+    // afterprint doesn't fire (browser quirk) — the dialog is long gone by then.
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+    const cleanup = () => {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      if (url) URL.revokeObjectURL(url);
+      url = null;
+      iframe?.remove();
+      iframe = null;
+    };
+    try {
+      const blob = await fetchInvoicePdfBlob(invoice.id);
+      url = URL.createObjectURL(blob);
+      iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = url;
+      document.body.appendChild(iframe);
+      await new Promise<void>((resolve, reject) => {
+        if (!iframe) {
+          reject(new Error("تعذّرت الطباعة"));
+          return;
+        }
+        iframe.onload = () => resolve();
+        iframe.onerror = () => reject(new Error("تعذّرت الطباعة"));
+      });
+      const frameWindow = iframe.contentWindow;
+      if (!frameWindow) throw new Error("تعذّرت الطباعة");
+      frameWindow.onafterprint = cleanup;
+      fallbackTimer = setTimeout(cleanup, 60_000);
+      frameWindow.focus();
+      frameWindow.print();
+    } catch {
+      // iframe printing failed (or was blocked) — fall back to a new tab
+      // with the already-fetched PDF instead of failing silently.
+      const opened = openPdfInNewTab(url);
+      cleanup();
+      if (!opened) toast.error("تعذّرت الطباعة — اسمح بالنوافذ المنبثقة ثم حاول مجددًا");
+    } finally {
+      setPrintBusy(false);
+    }
+  }
+
+  /**
+   * Safari path (and iframe-failure fallback): open the fetched PDF in a new
+   * tab so the user prints from the browser's built-in PDF viewer.
+   * When `presetTab` is provided it must come from the synchronous click
+   * handler, otherwise popup blockers may refuse the new tab.
+   */
+  async function handlePrintViaTab(invoice: InvoiceDetailResponse, presetTab: Window | null) {
+    setPrintBusy(true);
+    const tab = presetTab ?? window.open("", "_blank");
+    if (!tab) {
+      setPrintBusy(false);
+      toast.error("تعذّر فتح نافذة جديدة — اسمح بالنوافذ المنبثقة ثم حاول مجددًا");
+      return;
+    }
+    try {
+      const blob = await fetchInvoicePdfBlob(invoice.id);
+      const url = URL.createObjectURL(blob);
+      tab.location.href = url;
+      // Keep the URL alive while the user prints manually from the viewer.
+      setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
+    } catch (error) {
+      tab.close();
+      toast.error(parseApiError(error).message);
+    } finally {
+      setPrintBusy(false);
+    }
+  }
+
   if (!id) return <ErrorCard message="رقم الفاتورة غير صالح" />;
   if (invoiceQuery.isPending) return <TableSkeleton rows={8} cols={3} />;
   if (invoiceQuery.isError || !invoiceQuery.data) {
@@ -519,6 +621,14 @@ export function InvoiceBuilderPage() {
             >
               <FileDown className="size-4" />
               {pdfBusy ? "جارٍ التجهيز…" : "PDF"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handlePrint(invoice)}
+              disabled={printBusy}
+            >
+              <Printer className="size-4" />
+              {printBusy ? "جارٍ التجهيز…" : "طباعة"}
             </Button>
           </>
         }
@@ -727,6 +837,10 @@ export function InvoiceBuilderPage() {
         <Button variant="outline" onClick={() => handlePdf(invoice)} disabled={pdfBusy}>
           <Download className="size-4" />
           {pdfBusy ? "جارٍ التجهيز…" : "تنزيل PDF"}
+        </Button>
+        <Button variant="outline" onClick={() => handlePrint(invoice)} disabled={printBusy}>
+          <Printer className="size-4" />
+          {printBusy ? "جارٍ التجهيز…" : "طباعة"}
         </Button>
       </div>
 
