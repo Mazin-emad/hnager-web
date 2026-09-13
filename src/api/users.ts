@@ -36,3 +36,11 @@ export async function toggleUserStatus(id: string): Promise<void> {
 export async function unlockUser(id: string): Promise<void> {
   await api.put(`/api/Users/${id}/unlock`);
 }
+
+/**
+ * Requires `users:delete`. The API rejects self-deletion
+ * with `403 User.CannotDeleteSelf`.
+ */
+export async function deleteUser(id: string): Promise<void> {
+  await api.delete(`/api/Users/${id}`);
+}

@@ -4,19 +4,20 @@ import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Pencil, Plus, Power } from "lucide-react";
+import { Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   createVariable,
+  deleteVariable,
   listVariables,
   toggleVariableActive,
   updateVariable,
   variableKeys,
 } from "@/api/variables";
 import { parseApiError } from "@/api/errors";
-import type { VariableResponse } from "@/api/types";
+import { LINES_COUNT_KEY, type VariableResponse } from "@/api/types";
 import { useAuth } from "@/auth/AuthContext";
-import { EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
+import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -53,7 +54,11 @@ const variableSchema = z.object({
     .string()
     .min(1, "المفتاح مطلوب")
     .max(100)
-    .regex(KEY_PATTERN, "حروف إنجليزية وأرقام و_ فقط، ويبدأ بحرف"),
+    .regex(KEY_PATTERN, "حروف إنجليزية وأرقام و_ فقط، ويبدأ بحرف")
+    // Reserved server-side for the invoice lines-count value (400 Variable.ReservedKey).
+    .refine((k) => k.trim() !== LINES_COUNT_KEY, {
+      message: `المفتاح ${LINES_COUNT_KEY} محجوز للنظام ولا يمكن استخدامه`,
+    }),
   unit: z.string().max(100).optional().or(z.literal("")),
   description: z.string().max(500).optional().or(z.literal("")),
   displayOrder: z.coerce.number().min(0, "لا يقل عن 0"),
@@ -200,11 +205,12 @@ function VariableDialog({
 }
 
 export function VariablesPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const [showInactive, setShowInactive] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<VariableResponse | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<VariableResponse | null>(null);
 
   const variablesQuery = useQuery({
     queryKey: variableKeys.all(!showInactive),
@@ -219,6 +225,21 @@ export function VariablesPage() {
     },
     onError: (error) => toast.error(parseApiError(error).message),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteVariable(id),
+    onSuccess: () => {
+      toast.success("تم حذف المتغير");
+      setDeleteTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ["variables"] });
+    },
+    onError: (error) => {
+      setDeleteTarget(null);
+      toast.error(parseApiError(error).message);
+    },
+  });
+
+  const canDelete = hasPermission("variables:delete");
 
   const variables = [...(variablesQuery.data ?? [])].sort((a, b) => a.displayOrder - b.displayOrder);
 
@@ -275,7 +296,7 @@ export function VariablesPage() {
                   <TableHead>المفتاح</TableHead>
                   <TableHead>الوحدة</TableHead>
                   <TableHead>الحالة</TableHead>
-                  {isAdmin && <TableHead className="w-32">إجراءات</TableHead>}
+                  {(isAdmin || canDelete) && <TableHead className="w-32">إجراءات</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -293,29 +314,45 @@ export function VariablesPage() {
                         {v.isActive ? "نشط" : "معطّل"}
                       </Badge>
                     </TableCell>
-                    {isAdmin && (
+                    {(isAdmin || canDelete) && (
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditing(v);
-                              setDialogOpen(true);
-                            }}
-                            aria-label="تعديل"
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={toggleMutation.isPending}
-                            onClick={() => toggleMutation.mutate(v.id)}
-                            aria-label={v.isActive ? "تعطيل" : "تفعيل"}
-                          >
-                            <Power className="size-4" />
-                          </Button>
+                          {isAdmin && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditing(v);
+                                  setDialogOpen(true);
+                                }}
+                                aria-label="تعديل"
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={toggleMutation.isPending}
+                                onClick={() => toggleMutation.mutate(v.id)}
+                                aria-label={v.isActive ? "تعطيل" : "تفعيل"}
+                              >
+                                <Power className="size-4" />
+                              </Button>
+                            </>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setDeleteTarget(v)}
+                              aria-label="حذف"
+                              title="حذف المتغير"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     )}
@@ -326,6 +363,21 @@ export function VariablesPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmAction
+        open={deleteTarget != null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="حذف المتغير؟"
+        description={
+          deleteTarget
+            ? `سيُحذف المتغير "${deleteTarget.name}" (${deleteTarget.key}) — يُمنع الحذف إذا كان مستخدمًا في أي معادلة.`
+            : undefined
+        }
+        confirmLabel="حذف"
+        danger
+        busy={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
     </div>
   );
 }

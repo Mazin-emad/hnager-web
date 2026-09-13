@@ -6,6 +6,13 @@ export type InvoiceType = "Sales" | "Purchases" | "Returns";
 export type InvoiceStatus = "Draft" | "Finalized" | "Cancelled";
 export type VariableType = "Number";
 
+/**
+ * Reserved, case-sensitive variable key computed server-side for item
+ * formulas. Never assignable to a product variable and never accepted by
+ * the product quantity/lines-count formula endpoints (400 there).
+ */
+export const LINES_COUNT_KEY = "LinesCount";
+
 // ── Auth ────────────────────────────────────────────────────────────────────
 
 export interface AuthRequest {
@@ -196,6 +203,10 @@ export interface ProductDetailResponse {
   quantityExpression: string | null;
   /** 0 = never configured; increments on each real change. */
   quantityFormulaVersion: number;
+  /** Lines-count formula text; null = never configured. */
+  linesCountExpression: string | null;
+  /** 0 = never configured; increments on each real change. */
+  linesCountFormulaVersion: number;
   variables: AssignedProductVariable[];
   items: ItemDetailResponse[];
 }
@@ -255,6 +266,20 @@ export interface QuantityFormulaResponse {
 
 /** PUT /api/v1/products/{id}/quantity-formula. May reference only assigned variables. */
 export interface UpsertQuantityFormulaRequest {
+  expression: string;
+}
+
+// ── Product lines-count formula (backend-calculated lines count) ────────────
+
+/** GET /api/v1/products/{id}/lines-count-formula. expression null + version 0 = never configured. */
+export interface LinesCountFormulaResponse {
+  productId: string;
+  expression: string | null;
+  version: number;
+}
+
+/** PUT /api/v1/products/{id}/lines-count-formula. May reference only assigned variables. */
+export interface UpsertLinesCountFormulaRequest {
   expression: string;
 }
 
@@ -327,6 +352,12 @@ export interface InvoiceProductBlock {
   productQuantityFormulaSnapshot: string;
   /** 0 if no formula was set at the time. */
   productQuantityFormulaVersion: number;
+  /** Backend-evaluated LinesCountFormula(variable values). Read-only display. */
+  linesCount: number;
+  /** Formula text used for this invoice; "" if none was set at the time. */
+  linesCountFormulaSnapshot: string;
+  /** 0 if no formula was set at the time. */
+  linesCountFormulaVersion: number;
   inputValues: InvoiceInputValue[];
   items: InvoiceItemSnapshot[];
 }

@@ -38,3 +38,11 @@ export async function evaluateFormula(
   const res = await api.post<EvaluateFormulaResponse>("/api/v1/formulas/evaluate", body);
   return res.data;
 }
+
+/**
+ * Hard delete of the config-only formula row (invoice snapshots are
+ * unaffected). Requires `formulas:delete`.
+ */
+export async function deleteFormula(itemId: string): Promise<void> {
+  await api.delete(`/api/v1/items/${itemId}/formula`);
+}

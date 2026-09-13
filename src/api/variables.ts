@@ -38,3 +38,11 @@ export async function updateVariable(
 export async function toggleVariableActive(id: string): Promise<void> {
   await api.patch(`/api/v1/variables/${id}/toggle-active`);
 }
+
+/**
+ * Soft delete. Requires `variables:delete`.
+ * Blocked (error) when the variable is referenced by any formula.
+ */
+export async function deleteVariable(id: string): Promise<void> {
+  await api.delete(`/api/v1/variables/${id}`);
+}

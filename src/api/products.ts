@@ -3,12 +3,14 @@ import type {
   CreateItemRequest,
   CreateProductRequest,
   ItemDetailResponse,
+  LinesCountFormulaResponse,
   ProductDetailResponse,
   ProductSummaryResponse,
   QuantityFormulaResponse,
   SetProductVariablesRequest,
   UpdateItemRequest,
   UpdateProductRequest,
+  UpsertLinesCountFormulaRequest,
   UpsertQuantityFormulaRequest,
 } from "./types";
 
@@ -17,6 +19,7 @@ export const productKeys = {
   detail: (id: string) => ["products", id] as const,
   configuration: (id: string) => ["products", id, "configuration"] as const,
   quantityFormula: (id: string) => ["products", id, "quantity-formula"] as const,
+  linesCountFormula: (id: string) => ["products", id, "lines-count-formula"] as const,
   items: (productId: string, activeOnly: boolean) =>
     ["products", productId, "items", activeOnly] as const,
 };
@@ -52,6 +55,11 @@ export async function updateProduct(
   return res.data;
 }
 
+/** Soft delete. Requires `products:delete`. */
+export async function deleteProduct(id: string): Promise<void> {
+  await api.delete(`/api/v1/products/${id}`);
+}
+
 export async function toggleProductActive(id: string): Promise<void> {
   await api.patch(`/api/v1/products/${id}/toggle-active`);
 }
@@ -76,6 +84,24 @@ export async function updateQuantityFormula(
 ): Promise<QuantityFormulaResponse> {
   const res = await api.put<QuantityFormulaResponse>(
     `/api/v1/products/${id}/quantity-formula`,
+    body,
+  );
+  return res.data;
+}
+
+/** Current lines-count formula for the product settings page (prefill the editor). */
+export async function getLinesCountFormula(id: string): Promise<LinesCountFormulaResponse> {
+  const res = await api.get<LinesCountFormulaResponse>(`/api/v1/products/${id}/lines-count-formula`);
+  return res.data;
+}
+
+/** Admin "Save formula" — returns the saved shape with bumped version on real change. */
+export async function updateLinesCountFormula(
+  id: string,
+  body: UpsertLinesCountFormulaRequest,
+): Promise<LinesCountFormulaResponse> {
+  const res = await api.put<LinesCountFormulaResponse>(
+    `/api/v1/products/${id}/lines-count-formula`,
     body,
   );
   return res.data;
@@ -118,4 +144,9 @@ export async function updateItem(
 
 export async function toggleItemActive(productId: string, id: string): Promise<void> {
   await api.patch(`/api/v1/products/${productId}/items/${id}/toggle-active`);
+}
+
+/** Soft delete. Requires `items:delete`. */
+export async function deleteItem(productId: string, id: string): Promise<void> {
+  await api.delete(`/api/v1/products/${productId}/items/${id}`);
 }

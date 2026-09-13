@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import { CheckCircle2, FlaskConical, Save, XCircle } from "lucide-react";
+import { CheckCircle2, FlaskConical, Save, Trash2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
+  deleteFormula,
   evaluateFormula,
   formulaKeys,
   getFormula,
@@ -11,7 +12,9 @@ import {
   validateFormula,
 } from "@/api/formulas";
 import { parseApiError } from "@/api/errors";
-import type { AssignedProductVariable } from "@/api/types";
+import { LINES_COUNT_KEY, type AssignedProductVariable } from "@/api/types";
+import { useAuth } from "@/auth/AuthContext";
+import { ConfirmAction } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,8 +41,12 @@ export function FormulaEditor({
   const [expression, setExpression] = useState("");
   const [loadedFormulaId, setLoadedFormulaId] = useState<string | null>(null);
   const [samples, setSamples] = useState<Record<string, string>>({});
+  const [linesCountSample, setLinesCountSample] = useState("");
   const [validation, setValidation] = useState<{ ok: boolean; message: string } | null>(null);
   const [evalResult, setEvalResult] = useState<number | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const { hasPermission } = useAuth();
+  const canDelete = hasPermission("formulas:delete");
 
   const formulaQuery = useQuery({
     queryKey: formulaKeys.detail(itemId),
@@ -78,6 +85,8 @@ export function FormulaEditor({
         const raw = (samples[v.variableId] ?? "").trim();
         if (raw !== "") sampleValues[v.key] = Number(raw);
       }
+      // Reserved server-side value — supply a trial number when testing.
+      if (linesCountSample.trim() !== "") sampleValues[LINES_COUNT_KEY] = Number(linesCountSample);
       return evaluateFormula({ expression: expression.trim(), productId, sampleValues });
     },
     onSuccess: (res) => setEvalResult(res.result),
@@ -92,6 +101,24 @@ export function FormulaEditor({
       onSaved?.();
     },
     onError: (error) => toast.error(parseApiError(error).message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteFormula(itemId),
+    onSuccess: () => {
+      toast.success("تم حذف المعادلة");
+      setDeleteOpen(false);
+      setExpression("");
+      setLoadedFormulaId(null);
+      setValidation(null);
+      setEvalResult(null);
+      void queryClient.invalidateQueries({ queryKey: formulaKeys.detail(itemId) });
+      onSaved?.();
+    },
+    onError: (error) => {
+      setDeleteOpen(false);
+      toast.error(parseApiError(error).message);
+    },
   });
 
   const variableKeys = variables.map((v) => v.key);
@@ -127,7 +154,10 @@ export function FormulaEditor({
           }}
           className="tnum font-mono text-left"
         />
-        {variableKeys.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            متغيرات المنتج + القيمة المحسوبة <code dir="ltr">LinesCount</code> (عدد الخطوط من الخادم).
+          </p>
           <div className="flex flex-wrap gap-1.5">
             {variableKeys.map((k) => (
               <button
@@ -141,8 +171,19 @@ export function FormulaEditor({
                 {k}
               </button>
             ))}
+            {/* Reserved server-side value — usable here, never in product formulas. */}
+            <button
+              key={LINES_COUNT_KEY}
+              type="button"
+              onClick={() => setExpression((e) => (e ? `${e} ${LINES_COUNT_KEY}` : LINES_COUNT_KEY))}
+              className="tnum rounded-md bg-clay-100 px-2 py-0.5 font-mono text-xs text-clay-700 hover:bg-clay-200"
+              dir="ltr"
+              title="عدد الخطوط المحسوب من الخادم — متاح في معادلات الأصناف فقط"
+            >
+              {LINES_COUNT_KEY}
+            </button>
           </div>
-        )}
+        </div>
         <div className="flex items-center gap-2">
           <Button
             type="button"
@@ -166,8 +207,7 @@ export function FormulaEditor({
         </div>
       </div>
 
-      {variables.length > 0 && (
-        <div className="space-y-2 rounded-2xl bg-muted/50 p-4">
+      <div className="space-y-2 rounded-2xl bg-muted/50 p-4">
           <p className="flex items-center gap-1.5 text-sm font-semibold">
             <FlaskConical className="size-4" />
             تجربة بقيم حقيقية
@@ -192,6 +232,23 @@ export function FormulaEditor({
                 />
               </div>
             ))}
+            <div className="space-y-1">
+              <Label htmlFor={`sample-${LINES_COUNT_KEY}`} className="text-xs">
+                عدد الخطوط <code dir="ltr">LinesCount</code>
+                <span className="text-muted-foreground"> (قيمة الخادم — للتجربة فقط)</span>
+              </Label>
+              <Input
+                id={`sample-${LINES_COUNT_KEY}`}
+                type="number"
+                step="any"
+                inputMode="decimal"
+                dir="ltr"
+                placeholder="0"
+                value={linesCountSample}
+                onChange={(e) => setLinesCountSample(e.target.value)}
+                className="tnum text-left"
+              />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <Button
@@ -210,17 +267,41 @@ export function FormulaEditor({
             )}
           </div>
         </div>
-      )}
+      </div>
 
-      <Button
-        type="button"
-        disabled={!expression.trim() || saveMutation.isPending}
-        onClick={() => saveMutation.mutate()}
-        className="bg-brand-800 hover:bg-brand-900"
-      >
-        <Save className="size-4" />
-        {saveMutation.isPending ? "جارٍ الحفظ…" : "حفظ المعادلة"}
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          disabled={!expression.trim() || saveMutation.isPending}
+          onClick={() => saveMutation.mutate()}
+          className="bg-brand-800 hover:bg-brand-900"
+        >
+          <Save className="size-4" />
+          {saveMutation.isPending ? "جارٍ الحفظ…" : "حفظ المعادلة"}
+        </Button>
+        {canDelete && !noFormulaYet && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={deleteMutation.isPending}
+            onClick={() => setDeleteOpen(true)}
+            className="text-destructive hover:text-destructive"
+          >
+            <Trash2 className="size-4" />
+            حذف المعادلة
+          </Button>
+        )}
+      </div>
+      <ConfirmAction
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="حذف معادلة الصنف؟"
+        description="سيُحذف إعداد المعادلة نهائيًا — لقطات الفواتير السابقة لا تتأثر."
+        confirmLabel="حذف"
+        danger
+        busy={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
+      />
     </div>
   );
 }

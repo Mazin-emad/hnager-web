@@ -87,14 +87,14 @@ export function LoginPage() {
         />
         <div className="relative flex items-center gap-4">
           <img
-            src="/again-mark.png"
-            alt="شعار مؤسسة اجين من جديد"
-            className="size-20 rounded-3xl object-cover shadow-2xl"
+            src="/again-logo.png"
+            alt="Again"
+            className="h-16 w-auto max-w-56 rounded-2xl bg-white object-contain px-3 py-2 shadow-2xl"
           />
           <div>
-            <p className="text-3xl font-bold text-paper">مؤسسة اجين من جديد</p>
+            <p dir="ltr" className="text-start text-3xl font-bold text-paper">Again</p>
             <p className="mt-1 text-sm tracking-wide text-brand-200">
-              AGAIN
+              نظام الفواتير
             </p>
           </div>
         </div>
@@ -109,7 +109,7 @@ export function LoginPage() {
           </div>
         </div>
         <p className="relative text-xs text-brand-300">
-          © مؤسسة اجين من جديد — جميع الحقوق محفوظة
+          © Again — جميع الحقوق محفوظة
         </p>
       </div>
 
@@ -118,9 +118,9 @@ export function LoginPage() {
         <Card className="w-full max-w-md shadow-xl">
           <CardHeader className="items-center text-center">
             <img
-              src="/again-mark.png"
-              alt="شعار مؤسسة اجين من جديد"
-              className="size-16 rounded-2xl object-cover lg:hidden"
+              src="/again-logo.png"
+              alt="Again"
+              className="h-12 w-auto max-w-48 rounded-xl bg-white object-contain px-2 py-1 lg:hidden"
             />
             <CardTitle className="text-2xl text-brand-950">
               تسجيل الدخول

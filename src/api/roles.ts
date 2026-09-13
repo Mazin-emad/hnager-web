@@ -34,3 +34,11 @@ export async function updateRole(id: string, body: RoleRequest): Promise<void> {
 export async function toggleRoleStatus(id: string): Promise<void> {
   await api.put(`/api/Roles/${id}/toggle-status`);
 }
+
+/**
+ * Requires `roles:delete`. Built-in Admin/Member roles are protected —
+ * the API rejects them with `403 Role.ProtectedRole`.
+ */
+export async function deleteRole(id: string): Promise<void> {
+  await api.delete(`/api/Roles/${id}`);
+}

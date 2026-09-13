@@ -19,10 +19,13 @@ export function SplashScreen() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-4 bg-brand-950">
       <img
-        src="/again-mark.png"
-        alt="مؤسسة اجين من جديد"
-        className="size-24 rounded-3xl object-cover shadow-2xl"
+        src="/again-logo.png"
+        alt="Again"
+        className="h-20 w-auto max-w-64 rounded-2xl bg-white object-contain px-3 py-2 shadow-2xl"
       />
+      <p dir="ltr" className="text-xl font-bold tracking-wide text-paper">
+        Again
+      </p>
       <div className="flex items-center gap-2 text-paper">
         <span className="size-2 animate-pulse rounded-full bg-clay-300" />
         جارٍ التحميل…

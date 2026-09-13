@@ -80,6 +80,15 @@ export async function finalizeInvoice(id: string): Promise<InvoiceDetailResponse
   return res.data;
 }
 
+/**
+ * Draft-only delete. Requires `invoices:delete`.
+ * Non-drafts fail with `422 Invoice.NotDraft`; a Member deleting someone
+ * else's invoice fails with `403 Invoice.AccessDenied`.
+ */
+export async function deleteInvoice(id: string): Promise<void> {
+  await api.delete(`/api/v1/invoices/${id}`);
+}
+
 /** Shared PDF fetch (blob) — used by both download and print so the API call isn't duplicated. */
 export async function fetchInvoicePdfBlob(id: string): Promise<Blob> {
   const res = await api.get(`/api/v1/invoices/${id}/pdf`, { responseType: "blob" });
