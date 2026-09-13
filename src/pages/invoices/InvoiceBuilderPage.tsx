@@ -749,9 +749,9 @@ export function InvoiceBuilderPage() {
                         <TableRow>
                           <TableHead>الصنف</TableHead>
                           <TableHead className="text-left">عدد</TableHead>
-                          <TableHead className="text-left">سعر الوحدة</TableHead>
                           <TableHead className="text-left">اجمالي العدد</TableHead>
-                          <TableHead className="text-left">الإجمالي</TableHead>
+                          <TableHead className="text-left">السعر</TableHead>
+                          <TableHead className="text-left">السعر الإجمالي</TableHead>
                           {isDraft && <TableHead className="w-24">الحالة</TableHead>}
                         </TableRow>
                       </TableHeader>
@@ -786,7 +786,6 @@ export function InvoiceBuilderPage() {
                                     >
                                       {recorded ? fmtNum(item.formulaResultSnapshot) : "—"}
                                     </TableCell>
-                                    <TableCell className="tnum text-left">{fmtMoney(item.unitPriceSnapshot)}</TableCell>
                                     <TableCell
                                       className="tnum text-left"
                                       title={
@@ -797,6 +796,7 @@ export function InvoiceBuilderPage() {
                                     >
                                       {fmtNum(item.quantitySnapshot)}
                                     </TableCell>
+                                    <TableCell className="tnum text-left">{fmtMoney(item.unitPriceSnapshot)}</TableCell>
                                   </>
                                 );
                               })()}

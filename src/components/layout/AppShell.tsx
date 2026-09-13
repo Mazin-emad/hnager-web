@@ -45,12 +45,12 @@ function BrandBlock({ compact = false }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-3">
       <img
-        src="/logo.jpg"
-        alt="شعار هناجر النبل"
+        src="/again-mark.png"
+        alt="شعار مؤسسة اجين من جديد"
         className={cn("rounded-2xl object-cover shadow-lg", compact ? "size-10" : "size-12")}
       />
       <div className="leading-tight">
-        <p className={cn("font-bold text-paper", compact ? "text-base" : "text-lg")}>هناجر النبل</p>
+        <p className={cn("font-bold text-paper", compact ? "text-base" : "text-lg")}>مؤسسة اجين من جديد</p>
         <p className="text-xs text-brand-200">نظام الفواتير</p>
       </div>
     </div>
@@ -200,7 +200,7 @@ export function AppShell() {
               >
                 <Menu className="size-5" />
               </Button>
-              <span className="text-sm font-semibold text-brand-900 lg:hidden">هناجر النبل</span>
+              <span className="text-sm font-semibold text-brand-900 lg:hidden">مؤسسة اجين من جديد</span>
             </div>
             <UserMenu />
           </div>

@@ -19,8 +19,8 @@ export function SplashScreen() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center gap-4 bg-brand-950">
       <img
-        src="/logo.jpg"
-        alt="هناجر النبل"
+        src="/again-mark.png"
+        alt="مؤسسة اجين من جديد"
         className="size-24 rounded-3xl object-cover shadow-2xl"
       />
       <div className="flex items-center gap-2 text-paper">

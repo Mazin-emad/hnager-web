@@ -87,14 +87,14 @@ export function LoginPage() {
         />
         <div className="relative flex items-center gap-4">
           <img
-            src="/logo.jpg"
-            alt="شعار هناجر النبل"
+            src="/again-mark.png"
+            alt="شعار مؤسسة اجين من جديد"
             className="size-20 rounded-3xl object-cover shadow-2xl"
           />
           <div>
-            <p className="text-3xl font-bold text-paper">هناجر النبل</p>
+            <p className="text-3xl font-bold text-paper">مؤسسة اجين من جديد</p>
             <p className="mt-1 text-sm tracking-wide text-brand-200">
-              HANGAR AL-NOBEL
+              AGAIN
             </p>
           </div>
         </div>
@@ -109,7 +109,7 @@ export function LoginPage() {
           </div>
         </div>
         <p className="relative text-xs text-brand-300">
-          © هناجر النبل — جميع الحقوق محفوظة
+          © مؤسسة اجين من جديد — جميع الحقوق محفوظة
         </p>
       </div>
 
@@ -118,8 +118,8 @@ export function LoginPage() {
         <Card className="w-full max-w-md shadow-xl">
           <CardHeader className="items-center text-center">
             <img
-              src="/logo.jpg"
-              alt="شعار هناجر النبل"
+              src="/again-mark.png"
+              alt="شعار مؤسسة اجين من جديد"
               className="size-16 rounded-2xl object-cover lg:hidden"
             />
             <CardTitle className="text-2xl text-brand-950">

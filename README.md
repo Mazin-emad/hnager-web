@@ -1,4 +1,4 @@
-# هناجر النبل — نظام الفواتير (Hangar Al-Nobel Invoice Web)
+# مؤسسة اجين من جديد — نظام الفواتير (Again Invoice Web)
 
 Arabic RTL web app for the Invoice Calculator .NET API: invoices (draft → finalize → PDF),
 product catalog with formula items, variables, users/roles admin, and account management.
