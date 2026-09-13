@@ -3,10 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { KeyRound, Pencil, Plus, Power } from "lucide-react";
+import { KeyRound, Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   createUser,
+  deleteUser,
   listUsers,
   toggleUserStatus,
   unlockUser,
@@ -242,6 +243,7 @@ export function UsersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<UserResponse | undefined>(undefined);
   const [toggleTarget, setToggleTarget] = useState<UserResponse | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserResponse | null>(null);
 
   const usersQuery = useQuery({ queryKey: userKeys.all, queryFn: listUsers });
 
@@ -264,7 +266,22 @@ export function UsersPage() {
     onError: (error) => toast.error(parseApiError(error).message),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteUser(id),
+    onSuccess: () => {
+      toast.success("تم حذف المستخدم");
+      setDeleteTarget(null);
+      void queryClient.invalidateQueries({ queryKey: userKeys.all });
+    },
+    onError: (error) => {
+      setDeleteTarget(null);
+      // 403 User.CannotDeleteSelf maps to a clear Arabic message in errors.ts.
+      toast.error(parseApiError(error).message);
+    },
+  });
+
   const canEdit = hasPermission("users:update");
+  const canDelete = hasPermission("users:delete");
 
   return (
     <div>
@@ -313,7 +330,7 @@ export function UsersPage() {
                   <TableHead>البريد</TableHead>
                   <TableHead>الأدوار</TableHead>
                   <TableHead>الحالة</TableHead>
-                  {canEdit && <TableHead className="w-36">إجراءات</TableHead>}
+                  {(canEdit || canDelete) && <TableHead className="w-36">إجراءات</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -339,38 +356,54 @@ export function UsersPage() {
                         {u.isDisabled ? "معطّل" : "نشط"}
                       </Badge>
                     </TableCell>
-                    {canEdit && (
+                    {(canEdit || canDelete) && (
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditing(u);
-                              setDialogOpen(true);
-                            }}
-                            aria-label="تعديل"
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setToggleTarget(u)}
-                            aria-label={u.isDisabled ? "تفعيل" : "تعطيل"}
-                          >
-                            <Power className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={unlockMutation.isPending}
-                            onClick={() => unlockMutation.mutate(u.id)}
-                            aria-label="فك القفل"
-                            title="فك قفل الحساب"
-                          >
-                            <KeyRound className="size-4" />
-                          </Button>
+                          {canEdit && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditing(u);
+                                  setDialogOpen(true);
+                                }}
+                                aria-label="تعديل"
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setToggleTarget(u)}
+                                aria-label={u.isDisabled ? "تفعيل" : "تعطيل"}
+                              >
+                                <Power className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={unlockMutation.isPending}
+                                onClick={() => unlockMutation.mutate(u.id)}
+                                aria-label="فك القفل"
+                                title="فك قفل الحساب"
+                              >
+                                <KeyRound className="size-4" />
+                              </Button>
+                            </>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setDeleteTarget(u)}
+                              aria-label="حذف"
+                              title="حذف المستخدم"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     )}
@@ -395,6 +428,21 @@ export function UsersPage() {
         danger={!toggleTarget?.isDisabled}
         busy={toggleMutation.isPending}
         onConfirm={() => toggleTarget && toggleMutation.mutate(toggleTarget.id)}
+      />
+
+      <ConfirmAction
+        open={deleteTarget != null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="حذف المستخدم؟"
+        description={
+          deleteTarget
+            ? `سيُحذف المستخدم "${deleteTarget.firstName} ${deleteTarget.lastName}" — لا يمكنك حذف حسابك نفسه.`
+            : undefined
+        }
+        confirmLabel="حذف"
+        danger
+        busy={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />
     </div>
   );

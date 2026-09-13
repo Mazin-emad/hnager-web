@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
@@ -21,6 +21,7 @@ import {
 import { toast } from "sonner";
 import {
   addInvoiceProduct,
+  deleteInvoice,
   downloadInvoicePdf,
   fetchInvoicePdfBlob,
   finalizeInvoice,
@@ -34,6 +35,7 @@ import {
 import { getProductConfiguration, listProducts, productKeys } from "@/api/products";
 import { parseApiError } from "@/api/errors";
 import type { AddInvoiceProductRequest, InvoiceDetailResponse, InvoiceType } from "@/api/types";
+import { useAuth } from "@/auth/AuthContext";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS } from "@/lib/labels";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum } from "@/lib/format";
 import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
@@ -444,9 +446,13 @@ function EditHeaderDialog({ invoice }: { invoice: InvoiceDetailResponse }) {
 
 export function InvoiceBuilderPage() {
   const { id = "" } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
+  const canDeleteInvoice = hasPermission("invoices:delete");
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [printBusy, setPrintBusy] = useState(false);
 
@@ -493,6 +499,21 @@ export function InvoiceBuilderPage() {
       void invalidate();
     },
     onError: (error) => toast.error(parseApiError(error).message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteInvoice(id),
+    onSuccess: () => {
+      toast.success("تم حذف الفاتورة");
+      setDeleteOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      navigate("/invoices");
+    },
+    onError: (error) => {
+      setDeleteOpen(false);
+      // 422 Invoice.NotDraft / 403 Invoice.AccessDenied map to Arabic in errors.ts.
+      toast.error(parseApiError(error).message);
+    },
   });
 
   async function handlePdf(invoice: InvoiceDetailResponse) {
@@ -630,6 +651,17 @@ export function InvoiceBuilderPage() {
               <Printer className="size-4" />
               {printBusy ? "جارٍ التجهيز…" : "طباعة"}
             </Button>
+            {canDeleteInvoice && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="size-4" />
+                حذف الفاتورة
+              </Button>
+            )}
           </>
         }
       />
@@ -719,6 +751,17 @@ export function InvoiceBuilderPage() {
                       }
                     >
                       الكمية: {fmtNum(block.productQuantity)}
+                    </Badge>
+                    <Badge
+                      variant="secondary"
+                      className="tnum"
+                      title={
+                        block.linesCountFormulaSnapshot
+                          ? `معادلة عدد الخطوط (v${block.linesCountFormulaVersion}): ${block.linesCountFormulaSnapshot}`
+                          : "لا توجد معادلة لعدد الخطوط"
+                      }
+                    >
+                      عدد الخطوط: {fmtNum(block.linesCount)}
                     </Badge>
                   </div>
                   {isDraft && (
@@ -862,6 +905,16 @@ export function InvoiceBuilderPage() {
         danger
         busy={removeMutation.isPending}
         onConfirm={() => removeTarget && removeMutation.mutate(removeTarget)}
+      />
+      <ConfirmAction
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title="حذف الفاتورة؟"
+        description="سيُحذف الفاتورة نهائيًا — الحذف متاح للمسودات فقط."
+        confirmLabel="حذف"
+        danger
+        busy={deleteMutation.isPending}
+        onConfirm={() => deleteMutation.mutate()}
       />
     </div>
   );

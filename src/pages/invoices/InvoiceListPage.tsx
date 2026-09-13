@@ -5,14 +5,15 @@ import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ChevronLeft, ChevronRight, FilePlus2, FileText, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, FilePlus2, FileText, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { createInvoice, invoiceKeys, listInvoices } from "@/api/invoices";
+import { createInvoice, deleteInvoice, invoiceKeys, listInvoices } from "@/api/invoices";
 import { parseApiError } from "@/api/errors";
-import type { InvoiceFilters, InvoiceStatus, InvoiceType } from "@/api/types";
+import type { InvoiceFilters, InvoiceListItem, InvoiceStatus, InvoiceType } from "@/api/types";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS } from "@/lib/labels";
 import { fmtDate, fmtMoney, todayIso } from "@/lib/format";
-import { EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
+import { useAuth } from "@/auth/AuthContext";
+import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -75,9 +76,12 @@ function statusVariant(status: InvoiceStatus): "default" | "secondary" | "destru
 export function InvoiceListPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
+  const canDelete = hasPermission("invoices:delete");
   const [filters, setFilters] = useState<InvoiceFilters>({ page: 1, pageSize: PAGE_SIZE });
   const [searchInput, setSearchInput] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<InvoiceListItem | null>(null);
 
   const listQuery = useQuery({
     queryKey: invoiceKeys.list(filters),
@@ -109,6 +113,20 @@ export function InvoiceListPage() {
       navigate(`/invoices/${invoice.id}`);
     },
     onError: (error) => toast.error(parseApiError(error).message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteInvoice(id),
+    onSuccess: () => {
+      toast.success("تم حذف الفاتورة");
+      setDeleteTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ["invoices"] });
+    },
+    onError: (error) => {
+      setDeleteTarget(null);
+      // 422 Invoice.NotDraft / 403 Invoice.AccessDenied map to Arabic in errors.ts.
+      toast.error(parseApiError(error).message);
+    },
   });
 
   function applySearch() {
@@ -394,6 +412,7 @@ export function InvoiceListPage() {
                     <TableHead>التاريخ</TableHead>
                     <TableHead>الحالة</TableHead>
                     <TableHead className="text-left">الإجمالي</TableHead>
+                    {canDelete && <TableHead className="w-20">إجراءات</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -417,6 +436,20 @@ export function InvoiceListPage() {
                       <TableCell className="tnum text-left font-semibold">
                         {fmtMoney(inv.grandTotal)}
                       </TableCell>
+                      {canDelete && (
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => setDeleteTarget(inv)}
+                            aria-label="حذف"
+                            title="حذف الفاتورة (المسودات فقط)"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -450,6 +483,21 @@ export function InvoiceListPage() {
           </div>
         </>
       )}
+
+      <ConfirmAction
+        open={deleteTarget != null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="حذف الفاتورة؟"
+        description={
+          deleteTarget
+            ? `سيُحذف الفاتورة ${deleteTarget.invoiceNumber} نهائيًا — الحذف متاح للمسودات فقط.`
+            : undefined
+        }
+        confirmLabel="حذف"
+        danger
+        busy={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
     </div>
   );
 }

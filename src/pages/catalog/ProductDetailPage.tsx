@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
@@ -17,6 +17,8 @@ import {
 import { toast } from "sonner";
 import {
   createItem,
+  deleteItem,
+  deleteProduct,
   getProduct,
   listItems,
   productKeys,
@@ -30,8 +32,10 @@ import { parseApiError } from "@/api/errors";
 import type { AssignedProductVariable, ItemDetailResponse } from "@/api/types";
 import { useAuth } from "@/auth/AuthContext";
 import { FormulaEditor } from "@/components/formula/FormulaEditor";
+import { LinesCountFormulaEditor } from "@/components/formula/LinesCountFormulaEditor";
 import { QuantityFormulaEditor } from "@/components/formula/QuantityFormulaEditor";
 import {
+  ConfirmAction,
   EmptyState,
   ErrorCard,
   PageHeader,
@@ -230,8 +234,11 @@ function ItemDialog({
 
 export function ProductDetailPage() {
   const { id = "" } = useParams();
-  const { isAdmin } = useAuth();
+  const navigate = useNavigate();
+  const { isAdmin, hasPermission } = useAuth();
   const queryClient = useQueryClient();
+  const canDeleteProduct = hasPermission("products:delete");
+  const canDeleteItem = hasPermission("items:delete");
 
   const [showInactiveItems, setShowInactiveItems] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
@@ -241,6 +248,8 @@ export function ProductDetailPage() {
   const [formulaItem, setFormulaItem] = useState<ItemDetailResponse | null>(
     null,
   );
+  const [deleteItemTarget, setDeleteItemTarget] = useState<ItemDetailResponse | null>(null);
+  const [deleteProductOpen, setDeleteProductOpen] = useState(false);
 
   // Variable-assignment draft (admin editing state)
   const [draftVars, setDraftVars] = useState<AssignedProductVariable[] | null>(
@@ -291,6 +300,33 @@ export function ProductDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ["products", id] });
     },
     onError: (error) => toast.error(parseApiError(error).message),
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: (itemId: string) => deleteItem(id, itemId),
+    onSuccess: () => {
+      toast.success("تم حذف الصنف");
+      setDeleteItemTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ["products", id] });
+    },
+    onError: (error) => {
+      setDeleteItemTarget(null);
+      toast.error(parseApiError(error).message);
+    },
+  });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: () => deleteProduct(id),
+    onSuccess: () => {
+      toast.success("تم حذف المنتج");
+      setDeleteProductOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      navigate("/products");
+    },
+    onError: (error) => {
+      setDeleteProductOpen(false);
+      toast.error(parseApiError(error).message);
+    },
   });
 
   const saveVarsMutation = useMutation({
@@ -361,6 +397,17 @@ export function ProductDetailPage() {
               >
                 <Power className="size-4" />
                 {product.isActive ? "تعطيل" : "تفعيل"}
+              </Button>
+            )}
+            {canDeleteProduct && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={() => setDeleteProductOpen(true)}
+              >
+                <Trash2 className="size-4" />
+                حذف المنتج
               </Button>
             )}
           </>
@@ -547,6 +594,27 @@ export function ProductDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Lines-count formula (backend-calculated lines count / عدد الخطوط) */}
+      <Card className="mb-4">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-lg">معادلة عدد الخطوط</CardTitle>
+          {product.linesCountFormulaVersion > 0 && (
+            <Badge variant="secondary" className="tnum" dir="ltr">
+              v{product.linesCountFormulaVersion}
+            </Badge>
+          )}
+        </CardHeader>
+        <CardContent>
+          <LinesCountFormulaEditor
+            productId={id}
+            variables={[...product.variables].sort(
+              (a, b) => a.displayOrder - b.displayOrder,
+            )}
+            readOnly={!isAdmin}
+          />
+        </CardContent>
+      </Card>
+
       {/* Items */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -602,7 +670,7 @@ export function ProductDetailPage() {
                     <TableHead>السعر</TableHead>
                     <TableHead>المعادلة</TableHead>
                     <TableHead>الحالة</TableHead>
-                    {isAdmin && <TableHead className="w-40">إجراءات</TableHead>}
+                    {(isAdmin || canDeleteItem) && <TableHead className="w-40">إجراءات</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -649,38 +717,54 @@ export function ProductDetailPage() {
                           {item.isActive ? "نشط" : "معطّل"}
                         </Badge>
                       </TableCell>
-                      {isAdmin && (
+                      {(isAdmin || canDeleteItem) && (
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setEditingItem(item);
-                                setItemDialogOpen(true);
-                              }}
-                              aria-label="تعديل"
-                            >
-                              <Pencil className="size-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setFormulaItem(item)}
-                              aria-label="المعادلة"
-                              title="تحرير المعادلة"
-                            >
-                              <Sigma className="size-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              disabled={toggleItemMutation.isPending}
-                              onClick={() => toggleItemMutation.mutate(item.id)}
-                              aria-label={item.isActive ? "تعطيل" : "تفعيل"}
-                            >
-                              <Power className="size-4" />
-                            </Button>
+                            {isAdmin && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => {
+                                    setEditingItem(item);
+                                    setItemDialogOpen(true);
+                                  }}
+                                  aria-label="تعديل"
+                                >
+                                  <Pencil className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setFormulaItem(item)}
+                                  aria-label="المعادلة"
+                                  title="تحرير المعادلة"
+                                >
+                                  <Sigma className="size-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  disabled={toggleItemMutation.isPending}
+                                  onClick={() => toggleItemMutation.mutate(item.id)}
+                                  aria-label={item.isActive ? "تعطيل" : "تفعيل"}
+                                >
+                                  <Power className="size-4" />
+                                </Button>
+                              </>
+                            )}
+                            {canDeleteItem && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setDeleteItemTarget(item)}
+                                aria-label="حذف"
+                                title="حذف الصنف"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       )}
@@ -730,6 +814,29 @@ export function ProductDetailPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmAction
+        open={deleteItemTarget != null}
+        onOpenChange={(o) => !o && setDeleteItemTarget(null)}
+        title="حذف الصنف؟"
+        description={
+          deleteItemTarget ? `سيُحذف الصنف "${deleteItemTarget.name}" (حذف مرن).` : undefined
+        }
+        confirmLabel="حذف"
+        danger
+        busy={deleteItemMutation.isPending}
+        onConfirm={() => deleteItemTarget && deleteItemMutation.mutate(deleteItemTarget.id)}
+      />
+      <ConfirmAction
+        open={deleteProductOpen}
+        onOpenChange={setDeleteProductOpen}
+        title="حذف المنتج؟"
+        description={`سيُحذف المنتج "${product.name}" (حذف مرن).`}
+        confirmLabel="حذف"
+        danger
+        busy={deleteProductMutation.isPending}
+        onConfirm={() => deleteProductMutation.mutate()}
+      />
     </div>
   );
 }

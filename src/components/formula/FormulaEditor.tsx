@@ -267,7 +267,6 @@ export function FormulaEditor({
             )}
           </div>
         </div>
-      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Button

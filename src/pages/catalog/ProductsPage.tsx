@@ -5,10 +5,11 @@ import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Package, Pencil, Plus, Power } from "lucide-react";
+import { Package, Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   createProduct,
+  deleteProduct,
   listProducts,
   productKeys,
   toggleProductActive,
@@ -17,7 +18,7 @@ import {
 import { parseApiError } from "@/api/errors";
 import type { ProductSummaryResponse } from "@/api/types";
 import { useAuth } from "@/auth/AuthContext";
-import { EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
+import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -152,11 +153,12 @@ function ProductDialog({
 
 export function ProductsPage() {
   const navigate = useNavigate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const [showInactive, setShowInactive] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ProductSummaryResponse | undefined>(undefined);
+  const [deleteTarget, setDeleteTarget] = useState<ProductSummaryResponse | null>(null);
 
   const productsQuery = useQuery({
     queryKey: productKeys.all(!showInactive),
@@ -171,6 +173,21 @@ export function ProductsPage() {
     },
     onError: (error) => toast.error(parseApiError(error).message),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteProduct(id),
+    onSuccess: () => {
+      toast.success("تم حذف المنتج");
+      setDeleteTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+    onError: (error) => {
+      setDeleteTarget(null);
+      toast.error(parseApiError(error).message);
+    },
+  });
+
+  const canDelete = hasPermission("products:delete");
 
   const products = [...(productsQuery.data ?? [])].sort((a, b) => a.displayOrder - b.displayOrder);
 
@@ -225,8 +242,8 @@ export function ProductsPage() {
                 <TableRow>
                   <TableHead>الاسم</TableHead>
                   <TableHead className="text-left">الأصناف النشطة</TableHead>
-                  <TableHead>الحالة</TableHead>
-                  {isAdmin && <TableHead className="w-32">إجراءات</TableHead>}
+                    <TableHead>الحالة</TableHead>
+                    {(isAdmin || canDelete) && <TableHead className="w-32">إجراءات</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -248,29 +265,45 @@ export function ProductsPage() {
                         {p.isActive ? "نشط" : "معطّل"}
                       </Badge>
                     </TableCell>
-                    {isAdmin && (
+                    {(isAdmin || canDelete) && (
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditing(p);
-                              setDialogOpen(true);
-                            }}
-                            aria-label="تعديل"
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={toggleMutation.isPending}
-                            onClick={() => toggleMutation.mutate(p.id)}
-                            aria-label={p.isActive ? "تعطيل" : "تفعيل"}
-                          >
-                            <Power className="size-4" />
-                          </Button>
+                          {isAdmin && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditing(p);
+                                  setDialogOpen(true);
+                                }}
+                                aria-label="تعديل"
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={toggleMutation.isPending}
+                                onClick={() => toggleMutation.mutate(p.id)}
+                                aria-label={p.isActive ? "تعطيل" : "تفعيل"}
+                              >
+                                <Power className="size-4" />
+                              </Button>
+                            </>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setDeleteTarget(p)}
+                              aria-label="حذف"
+                              title="حذف المنتج"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     )}
@@ -281,6 +314,19 @@ export function ProductsPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmAction
+        open={deleteTarget != null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="حذف المنتج؟"
+        description={
+          deleteTarget ? `سيُحذف المنتج "${deleteTarget.name}" (حذف مرن).` : undefined
+        }
+        confirmLabel="حذف"
+        danger
+        busy={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+      />
     </div>
   );
 }

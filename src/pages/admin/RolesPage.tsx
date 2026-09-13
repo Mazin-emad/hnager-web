@@ -3,10 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Pencil, Plus, Power } from "lucide-react";
+import { Pencil, Plus, Power, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   createRole,
+  deleteRole,
   getRole,
   listRoles,
   roleKeys,
@@ -208,6 +209,7 @@ export function RolesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<RoleListItem | undefined>(undefined);
   const [toggleTarget, setToggleTarget] = useState<RoleListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RoleListItem | null>(null);
 
   const rolesQuery = useQuery({
     queryKey: roleKeys.all(includeDisabled),
@@ -224,7 +226,22 @@ export function RolesPage() {
     onError: (error) => toast.error(parseApiError(error).message),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteRole(id),
+    onSuccess: () => {
+      toast.success("تم حذف الدور");
+      setDeleteTarget(null);
+      void queryClient.invalidateQueries({ queryKey: ["roles"] });
+    },
+    onError: (error) => {
+      setDeleteTarget(null);
+      // 403 Role.ProtectedRole maps to a clear Arabic message in errors.ts.
+      toast.error(parseApiError(error).message);
+    },
+  });
+
   const canEdit = hasPermission("roles:update");
+  const canDelete = hasPermission("roles:delete");
 
   return (
     <div>
@@ -282,7 +299,7 @@ export function RolesPage() {
                   <TableHead>الدور</TableHead>
                   <TableHead>الصلاحيات</TableHead>
                   <TableHead>الحالة</TableHead>
-                  {canEdit && <TableHead className="w-28">إجراءات</TableHead>}
+                  {(canEdit || canDelete) && <TableHead className="w-28">إجراءات</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -297,28 +314,44 @@ export function RolesPage() {
                         {r.isDeleted ? "محذوف" : "نشط"}
                       </Badge>
                     </TableCell>
-                    {canEdit && (
+                    {(canEdit || canDelete) && (
                       <TableCell>
                         <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditing(r);
-                              setDialogOpen(true);
-                            }}
-                            aria-label="تعديل"
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setToggleTarget(r)}
-                            aria-label={r.isDeleted ? "استعادة" : "حذف"}
-                          >
-                            <Power className="size-4" />
-                          </Button>
+                          {canEdit && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setEditing(r);
+                                  setDialogOpen(true);
+                                }}
+                                aria-label="تعديل"
+                              >
+                                <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setToggleTarget(r)}
+                                aria-label={r.isDeleted ? "استعادة" : "حذف"}
+                              >
+                                <Power className="size-4" />
+                              </Button>
+                            </>
+                          )}
+                          {canDelete && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setDeleteTarget(r)}
+                              aria-label="حذف"
+                              title="حذف الدور"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     )}
@@ -338,6 +371,21 @@ export function RolesPage() {
         danger={!toggleTarget?.isDeleted}
         busy={toggleMutation.isPending}
         onConfirm={() => toggleTarget && toggleMutation.mutate(toggleTarget.id)}
+      />
+
+      <ConfirmAction
+        open={deleteTarget != null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="حذف الدور؟"
+        description={
+          deleteTarget
+            ? `سيُحذف الدور "${deleteTarget.name}" — الأدوار المدمجة (Admin/Member) محمية ولا يمكن حذفها.`
+            : undefined
+        }
+        confirmLabel="حذف"
+        danger
+        busy={deleteMutation.isPending}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />
     </div>
   );
