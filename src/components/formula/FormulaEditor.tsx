@@ -29,12 +29,19 @@ export function FormulaEditor({
   itemId,
   itemName,
   variables,
+  activeVariableIds,
   onSaved,
 }: {
   productId: string;
   itemId: string;
   itemName: string;
   variables: AssignedProductVariable[];
+  /**
+   * Ids of catalog-active variables. When provided, insert-chips hide
+   * since-disabled variables so they can't enter NEW expressions.
+   * Saved expressions and sample inputs are untouched (historical data).
+   */
+  activeVariableIds?: Set<string>;
   onSaved?: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -121,7 +128,12 @@ export function FormulaEditor({
     },
   });
 
-  const variableKeys = variables.map((v) => v.key);
+  // Insert-chips = new-selection surface → active only. Sample inputs below
+  // intentionally still use the full `variables` (old formulas need values).
+  const insertableVars = activeVariableIds
+    ? variables.filter((v) => activeVariableIds.has(v.variableId))
+    : variables;
+  const variableKeys = insertableVars.map((v) => v.key);
 
   return (
     <div className="space-y-4">

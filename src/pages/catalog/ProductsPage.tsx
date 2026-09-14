@@ -320,7 +320,7 @@ export function ProductsPage() {
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         title="حذف المنتج؟"
         description={
-          deleteTarget ? `سيُحذف المنتج "${deleteTarget.name}" (حذف مرن).` : undefined
+          deleteTarget ? `سيُحذف المنتج "${deleteTarget.name}" نهائيًا مع أصنافه ومعادلاتها (حذف نهائي).` : undefined
         }
         confirmLabel="حذف"
         danger

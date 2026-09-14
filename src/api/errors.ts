@@ -19,7 +19,7 @@ const CODE_MESSAGES: Record<string, string> = {
   "User.CannotDeleteSelf": "لا يمكنك حذف حسابك نفسه",
   "Role.InvalidRoles": "أدوار غير صالحة",
   "Role.RoleNotFound": "الدور غير موجود",
-  "Role.ProtectedRole": "هذا الدور محمي ولا يمكن حذفه",
+  "Role.ProtectedRole": "هذا الدور مدمج ومحمي — لا يمكن حذفه أو تعديله",
   "Role.InvalidPermissions": "صلاحيات غير صالحة",
   "Role.DuplicatedRole": "اسم الدور مكرر",
   "Variable.NotFound": "المتغير غير موجود",
@@ -35,14 +35,15 @@ const CODE_MESSAGES: Record<string, string> = {
   "Product.VariableNotFound": "أحد المتغيرات غير موجود",
   "Item.NotFound": "الصنف غير موجود",
   "Item.ProductNotFound": "المنتج الأب غير موجود",
-  "Item.PriceCannotBeNegative": "السعر لا يمكن أن يكون سالبًا",
+  "Item.PriceCannotBeNegative": "سعر البيع/الشراء لا يمكن أن يكون سالبًا",
+  "Item.PriceChangeNotAllowed": "لا تملك صلاحية تغيير أسعار الأصناف",
   "Formula.NotFound": "المعادلة غير موجودة",
   "Formula.ParseFailed": "تعذّر تحليل المعادلة",
   "Formula.ValidationFailed": "المعادلة غير صالحة",
   "Formula.EvaluationFailed": "تعذّر حساب المعادلة",
   "Invoice.NotFound": "الفاتورة غير موجودة",
   "Invoice.NotDraft": "العملية متاحة للمسودات فقط",
-  "Invoice.AccessDenied": "لا تملك صلاحية حذف هذه الفاتورة",
+  "Invoice.AccessDenied": "لا تملك صلاحية الوصول إلى هذه الفاتورة",
   "Invoice.NoProducts": "لا يمكن الاعتماد — لا توجد أصناف",
   "Invoice.InvoiceProductNotFound": "بند المنتج غير موجود",
   "Invoice.InvoiceItemNotFound": "بند الصنف غير موجود",
@@ -60,16 +61,18 @@ export interface ParsedApiError {
 }
 
 /**
- * Raw server detail for application errors: `errors[1]` in
- * `{ errors: [code, description] }`. Used under the formula editors where the
- * spec requires showing the server message verbatim (it names the bad key for
- * Formula.ValidationFailed). Returns undefined when absent.
+ * Raw server detail for application errors: `extensions.errors[1]` in
+ * ProblemDetails (legacy flat `{ errors: [code, description] }` also read).
+ * Used under the formula editors where the spec requires showing the server
+ * message verbatim (it names the bad key for Formula.ValidationFailed).
+ * Returns undefined when absent.
  */
 export function getServerErrorDetail(error: unknown): string | undefined {
   if (!axios.isAxiosError(error)) return undefined;
   const data = axiosErrorData(error);
-  if (data && Array.isArray(data.errors)) {
-    const description = (data.errors as unknown[])[1];
+  const nested = extractDomainError(data);
+  if (nested) {
+    const description = nested[1];
     if (typeof description === "string" && description.trim()) return description;
   }
   return undefined;
@@ -78,6 +81,23 @@ export function getServerErrorDetail(error: unknown): string | undefined {
 function axiosErrorData(error: AxiosError): Record<string, unknown> | undefined {
   const data = (error as AxiosError<unknown>).response?.data;
   return typeof data === "object" && data != null ? (data as Record<string, unknown>) : undefined;
+}
+
+/**
+ * Domain (ProblemDetails) errors carry the stable machine code in
+ * `extensions.errors[0]` and the human message in `extensions.errors[1]`.
+ * Older backends sent a flat `{ errors: [code, description] }` — still
+ * accepted as a fallback. Returns undefined for field-validation shapes.
+ */
+function extractDomainError(data: Record<string, unknown> | undefined): string[] | undefined {
+  if (!data) return undefined;
+  const extensions = data.extensions;
+  if (typeof extensions === "object" && extensions != null) {
+    const nested = (extensions as Record<string, unknown>).errors;
+    if (Array.isArray(nested)) return nested as string[];
+  }
+  if (Array.isArray(data.errors)) return data.errors as string[];
+  return undefined;
 }
 
 /** Single place that understands both API error shapes. */
@@ -106,9 +126,11 @@ export function parseApiError(error: unknown): ParsedApiError {
   }
   if (typeof data === "object") {
     const record = data as Record<string, unknown>;
-    // Application errors: { errors: [code, description] }
-    if (Array.isArray(record.errors)) {
-      const [code, description] = record.errors as string[];
+    // Domain errors (ProblemDetails): extensions.errors = [code, description].
+    // Legacy flat { errors: [code, description] } also accepted.
+    const domain = extractDomainError(record);
+    if (domain) {
+      const [code, description] = domain;
       const title = typeof record.title === "string" ? record.title : "";
       return {
         status,

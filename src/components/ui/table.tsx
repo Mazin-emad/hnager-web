@@ -30,7 +30,8 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
   return (
     <tbody
       data-slot="table-body"
-      className={cn("[&_tr:last-child]:border-0", className)}
+      // Zebra striping for row readability (applies to every table app-wide).
+      className={cn("[&_tr:last-child]:border-0 [&>tr:nth-child(even)]:bg-muted/50", className)}
       {...props}
     />
   )
@@ -54,7 +55,9 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
+        // Hover uses a green tint so it stays visible on both white (odd)
+        // and muted-striped (even) rows.
+        "border-b transition-colors hover:bg-brand-100/70 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
         className
       )}
       {...props}

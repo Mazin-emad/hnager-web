@@ -24,10 +24,17 @@ function isNotFound(error: unknown): boolean {
 export function QuantityFormulaEditor({
   productId,
   variables,
+  activeVariableIds,
   readOnly = false,
 }: {
   productId: string;
   variables: AssignedProductVariable[];
+  /**
+   * Ids of catalog-active variables. When provided, insert-chips hide
+   * since-disabled variables so they can't enter NEW expressions.
+   * The saved expression display is untouched (historical data).
+   */
+  activeVariableIds?: Set<string>;
   readOnly?: boolean;
 }) {
   const queryClient = useQueryClient();
@@ -90,7 +97,10 @@ export function QuantityFormulaEditor({
 
   const { expression: savedExpression, version } = formulaQuery.data;
   const neverConfigured = savedExpression == null;
-  const variableKeys = variables.map((v) => v.key);
+  const insertableVars = activeVariableIds
+    ? variables.filter((v) => activeVariableIds.has(v.variableId))
+    : variables;
+  const variableKeys = insertableVars.map((v) => v.key);
 
   if (readOnly) {
     return (

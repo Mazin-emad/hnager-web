@@ -291,8 +291,17 @@ function EditHeaderDialog({ invoice }: { invoice: InvoiceDetailResponse }) {
         discountPercent: values.discountPercent,
         notes: values.notes?.trim() ? values.notes : null,
       }),
-    onSuccess: () => {
-      toast.success("تم حفظ بيانات الفاتورة");
+    onSuccess: (updated) => {
+      const typeChanged = updated.invoiceType !== invoice.invoiceType;
+      // The backend re-prices every line from current catalog pricing when
+      // the type changes — never trust locally-held totals; use the fresh
+      // server response (and refetch to be safe).
+      queryClient.setQueryData(invoiceKeys.detail(invoice.id), updated);
+      toast.success(
+        typeChanged
+          ? "تم حفظ بيانات الفاتورة وأُعيد تسعير البنود حسب النوع الجديد"
+          : "تم حفظ بيانات الفاتورة",
+      );
       setOpen(false);
       void queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(invoice.id) });
     },
@@ -511,7 +520,7 @@ export function InvoiceBuilderPage() {
     },
     onError: (error) => {
       setDeleteOpen(false);
-      // 422 Invoice.NotDraft / 403 Invoice.AccessDenied map to Arabic in errors.ts.
+      // 403 Invoice.AccessDenied / 404 Invoice.NotFound map to Arabic in errors.ts.
       toast.error(parseApiError(error).message);
     },
   });
@@ -793,7 +802,7 @@ export function InvoiceBuilderPage() {
                           <TableHead>الصنف</TableHead>
                           <TableHead className="text-left">عدد</TableHead>
                           <TableHead className="text-left">اجمالي العدد</TableHead>
-                          <TableHead className="text-left">السعر</TableHead>
+                          <TableHead className="text-left" title="السعر المحسوم لنوع هذه الفاتورة: سعر البيع للمبيعات والمرتجع، وسعر الشراء للمشتريات">السعر</TableHead>
                           <TableHead className="text-left">السعر الإجمالي</TableHead>
                           {isDraft && <TableHead className="w-24">الحالة</TableHead>}
                         </TableRow>
@@ -910,7 +919,7 @@ export function InvoiceBuilderPage() {
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="حذف الفاتورة؟"
-        description="سيُحذف الفاتورة نهائيًا — الحذف متاح للمسودات فقط."
+        description="سيُحذف الفاتورة نهائيًا بجميع بنودها (حذف نهائي) — الحذف متاح بأي حالة بما فيها المعتمدة."
         confirmLabel="حذف"
         danger
         busy={deleteMutation.isPending}

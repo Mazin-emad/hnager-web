@@ -370,7 +370,7 @@ export function VariablesPage() {
         title="حذف المتغير؟"
         description={
           deleteTarget
-            ? `سيُحذف المتغير "${deleteTarget.name}" (${deleteTarget.key}) — يُمنع الحذف إذا كان مستخدمًا في أي معادلة.`
+            ? `سيُعطّل المتغير "${deleteTarget.name}" (${deleteTarget.key}) — حذف مرن (يبقى الصف، وحذف المعطّل مجددًا آمن). يُمنع التعطيل إذا كان المفتاح مستخدمًا في معادلة نشطة.`
             : undefined
         }
         confirmLabel="حذف"

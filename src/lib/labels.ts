@@ -39,6 +39,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   "items:read": "عرض الأصناف",
   "items:add": "إضافة الأصناف",
   "items:update": "تعديل الأصناف",
+  "items:update-price": "تغيير أسعار الأصناف",
   "items:delete": "حذف الأصناف",
   "variables:read": "عرض المتغيرات",
   "variables:add": "إضافة المتغيرات",
@@ -51,6 +52,9 @@ export const PERMISSION_LABELS: Record<string, string> = {
   "invoices:read": "عرض الفواتير",
   "invoices:add": "إضافة الفواتير",
   "invoices:update": "تعديل الفواتير",
+  "invoices:recalculate": "إعادة حساب الفواتير",
+  "invoices:finalize": "اعتماد الفواتير",
+  "invoices:pdf": "تصدير PDF للفواتير",
   "invoices:delete": "حذف الفواتير",
 };
 

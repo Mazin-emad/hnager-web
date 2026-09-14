@@ -40,8 +40,10 @@ export async function toggleVariableActive(id: string): Promise<void> {
 }
 
 /**
- * Soft delete. Requires `variables:delete`.
- * Blocked (error) when the variable is referenced by any formula.
+ * Soft delete (sets isActive = false, never removes the row). Requires
+ * `variables:delete`. Idempotent: deleting an already-inactive variable
+ * still returns 204. Blocked with `409 Variable.KeyInUseByFormula` when
+ * referenced by an active formula.
  */
 export async function deleteVariable(id: string): Promise<void> {
   await api.delete(`/api/v1/variables/${id}`);

@@ -187,7 +187,10 @@ export interface ItemDetailResponse {
   productId: string;
   name: string;
   code: string | null;
-  unitPrice: number;
+  /** سعر البيع — used for Sales and Returns invoices. Required, ≥ 0. */
+  salesPrice: number;
+  /** سعر الشراء — used for Purchase invoices. Required, ≥ 0. */
+  purchasePrice: number;
   isActive: boolean;
   displayOrder: number;
   formula: FormulaResponse | null;
@@ -214,7 +217,10 @@ export interface ProductDetailResponse {
 export interface CreateItemRequest {
   name: string;
   code?: string | null;
-  unitPrice: number;
+  /** سعر البيع — required, ≥ 0. */
+  salesPrice: number;
+  /** سعر الشراء — required, ≥ 0. */
+  purchasePrice: number;
   displayOrder: number;
 }
 
@@ -324,6 +330,11 @@ export interface InvoiceItemSnapshot {
   itemId: string;
   isExcluded: boolean;
   itemNameSnapshot: string;
+  /**
+   * Backend-resolved price for the invoice's type (single "السعر" column):
+   * salesPrice for Sales/Returns, purchasePrice for Purchases.
+   * Stale until Recalculate or an invoice-type change re-prices the lines.
+   */
   unitPriceSnapshot: number;
   formulaSnapshot: string | null;
   formulaVersion: number | null;
@@ -405,12 +416,14 @@ export interface AddInvoiceProductRequest {
 
 // ── Shared error shapes ─────────────────────────────────────────────────────
 
-/** Application errors (result.ToProblem()): errors[0] = code, errors[1] = description. */
+/** Application errors (ProblemDetails): code = extensions.errors[0], message = extensions.errors[1]. */
 export interface AppProblemDetails {
   type?: string;
   title: string;
   status: number;
-  errors: [string, string] | string[];
+  extensions?: { errors?: [string, string] | string[] };
+  /** Legacy flat shape (pre-change backend): errors[0] = code, errors[1] = description. */
+  errors?: [string, string] | string[];
 }
 
 /** FluentValidation / ASP.NET validation problems. */

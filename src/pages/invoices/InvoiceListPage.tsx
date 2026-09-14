@@ -124,7 +124,7 @@ export function InvoiceListPage() {
     },
     onError: (error) => {
       setDeleteTarget(null);
-      // 422 Invoice.NotDraft / 403 Invoice.AccessDenied map to Arabic in errors.ts.
+      // 403 Invoice.AccessDenied / 404 Invoice.NotFound map to Arabic in errors.ts.
       toast.error(parseApiError(error).message);
     },
   });
@@ -444,7 +444,7 @@ export function InvoiceListPage() {
                             className="text-destructive hover:text-destructive"
                             onClick={() => setDeleteTarget(inv)}
                             aria-label="حذف"
-                            title="حذف الفاتورة (المسودات فقط)"
+                            title="حذف الفاتورة (بأي حالة)"
                           >
                             <Trash2 className="size-4" />
                           </Button>
@@ -490,7 +490,7 @@ export function InvoiceListPage() {
         title="حذف الفاتورة؟"
         description={
           deleteTarget
-            ? `سيُحذف الفاتورة ${deleteTarget.invoiceNumber} نهائيًا — الحذف متاح للمسودات فقط.`
+            ? `سيُحذف الفاتورة ${deleteTarget.invoiceNumber} نهائيًا بجميع بنودها (حذف نهائي) — الحذف متاح بأي حالة بما فيها المعتمدة.`
             : undefined
         }
         confirmLabel="حذف"

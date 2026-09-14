@@ -80,7 +80,8 @@ import { fmtMoney } from "@/lib/format";
 const itemSchema = z.object({
   name: z.string().min(1, "الاسم مطلوب").max(200),
   code: z.string().max(100).optional().or(z.literal("")),
-  unitPrice: z.coerce.number().min(0, "السعر لا يكون سالبًا"),
+  salesPrice: z.coerce.number().min(0, "سعر البيع لا يكون سالبًا"),
+  purchasePrice: z.coerce.number().min(0, "سعر الشراء لا يكون سالبًا"),
   displayOrder: z.coerce.number().min(0, "لا يقل عن 0"),
 });
 
@@ -100,23 +101,33 @@ function ItemDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const queryClient = useQueryClient();
+  const { hasPermission } = useAuth();
   const isEdit = !!item;
+  // Changing either price needs the extra `items:update-price` permission
+  // (403 Item.PriceChangeNotAllowed). Renaming/reordering with unchanged
+  // prices works without it — so lock the price inputs instead of the form.
+  const canChangePrice = !isEdit || hasPermission("items:update-price");
   const form = useForm<ItemValues>({
     resolver: zodResolver(itemSchema) as unknown as Resolver<ItemValues>,
     defaultValues: {
       name: item?.name ?? "",
       code: item?.code ?? "",
-      unitPrice: item?.unitPrice ?? 0,
+      salesPrice: item?.salesPrice ?? 0,
+      purchasePrice: item?.purchasePrice ?? 0,
       displayOrder: item?.displayOrder ?? 0,
     },
   });
 
   const mutation = useMutation({
     mutationFn: (values: ItemValues) => {
+      // Without items:update-price the backend rejects ANY price diff
+      // (403 Item.PriceChangeNotAllowed) — resend the stored prices so a
+      // rename/reorder still succeeds.
       const body = {
         name: values.name.trim(),
         code: values.code?.trim() ? values.code.trim() : null,
-        unitPrice: values.unitPrice,
+        salesPrice: canChangePrice ? values.salesPrice : (item?.salesPrice ?? values.salesPrice),
+        purchasePrice: canChangePrice ? values.purchasePrice : (item?.purchasePrice ?? values.purchasePrice),
         displayOrder: values.displayOrder,
       };
       return isEdit
@@ -176,17 +187,16 @@ function ItemDialog({
               />
               <FormField
                 control={form.control}
-                name="unitPrice"
+                name="displayOrder"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>السعر</FormLabel>
+                    <FormLabel>الترتيب</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
                         type="number"
                         min={0}
-                        step="any"
-                        inputMode="decimal"
+                        inputMode="numeric"
                         className="tnum"
                       />
                     </FormControl>
@@ -195,25 +205,62 @@ function ItemDialog({
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name="displayOrder"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>الترتيب</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      type="number"
-                      min={0}
-                      inputMode="numeric"
-                      className="tnum"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="salesPrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>سعر البيع</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        className="tnum"
+                        disabled={!canChangePrice}
+                        title={canChangePrice ? undefined : "تغيير السعر يتطلب صلاحية items:update-price"}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="purchasePrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>سعر الشراء</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="number"
+                        min={0}
+                        step="any"
+                        inputMode="decimal"
+                        className="tnum"
+                        disabled={!canChangePrice}
+                        title={canChangePrice ? undefined : "تغيير السعر يتطلب صلاحية items:update-price"}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            {isEdit && !canChangePrice && (
+              <p className="rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                لا تملك صلاحية تغيير الأسعار — يمكنك تعديل الاسم والترتيب فقط.
+              </p>
+            )}
+            {form.watch("salesPrice") === form.watch("purchasePrice") && (
+              <p className="rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+                تنبيه: سعر البيع يساوي سعر الشراء — حدّث سعر الشراء إذا كان مختلفًا عن سعر البيع.
+              </p>
+            )}
             <DialogFooter>
               <Button
                 type="submit"
@@ -268,9 +315,12 @@ export function ProductDetailPage() {
     queryFn: () => listItems(id, !showInactiveItems),
     enabled: !!id,
   });
+  // Active-only catalog: disabled variables must never be selectable for
+  // new product assignments (nor for new formula chips derived below).
+  // Already-assigned variables stay visible everywhere (historical data).
   const catalogQuery = useQuery({
-    queryKey: variableKeys.all(false),
-    queryFn: () => listVariables(false),
+    queryKey: variableKeys.all(true),
+    queryFn: () => listVariables(true),
   });
 
   useEffect(() => {
@@ -377,6 +427,9 @@ export function ProductDetailPage() {
   const unassigned = (catalogQuery.data ?? []).filter(
     (v) => !assignedIds.has(v.id),
   );
+  // Catalog is active-only, so this is the set of variables selectable in
+  // new formulas. Unknown while the catalog loads → editors fall back to all.
+  const activeVariableIds = new Set((catalogQuery.data ?? []).map((v) => v.id));
 
   return (
     <div>
@@ -589,6 +642,7 @@ export function ProductDetailPage() {
             variables={[...product.variables].sort(
               (a, b) => a.displayOrder - b.displayOrder,
             )}
+            activeVariableIds={activeVariableIds}
             readOnly={!isAdmin}
           />
         </CardContent>
@@ -610,6 +664,7 @@ export function ProductDetailPage() {
             variables={[...product.variables].sort(
               (a, b) => a.displayOrder - b.displayOrder,
             )}
+            activeVariableIds={activeVariableIds}
             readOnly={!isAdmin}
           />
         </CardContent>
@@ -667,7 +722,8 @@ export function ProductDetailPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>الاسم</TableHead>
-                    <TableHead>السعر</TableHead>
+                    <TableHead className="text-left">سعر البيع</TableHead>
+                    <TableHead className="text-left">سعر الشراء</TableHead>
                     <TableHead>المعادلة</TableHead>
                     <TableHead>الحالة</TableHead>
                     {(isAdmin || canDeleteItem) && <TableHead className="w-40">إجراءات</TableHead>}
@@ -687,8 +743,11 @@ export function ProductDetailPage() {
                           </p>
                         )}
                       </TableCell>
-                      <TableCell className="tnum">
-                        {fmtMoney(item.unitPrice)}
+                      <TableCell className="tnum text-left">
+                        {fmtMoney(item.salesPrice)}
+                      </TableCell>
+                      <TableCell className="tnum text-left">
+                        {fmtMoney(item.purchasePrice)}
                       </TableCell>
                       <TableCell>
                         {item.formula ? (
@@ -805,6 +864,7 @@ export function ProductDetailPage() {
               variables={[...(productQuery.data?.variables ?? [])].sort(
                 (a, b) => a.displayOrder - b.displayOrder,
               )}
+              activeVariableIds={activeVariableIds}
               onSaved={() => {
                 void queryClient.invalidateQueries({
                   queryKey: ["products", id],
@@ -820,7 +880,7 @@ export function ProductDetailPage() {
         onOpenChange={(o) => !o && setDeleteItemTarget(null)}
         title="حذف الصنف؟"
         description={
-          deleteItemTarget ? `سيُحذف الصنف "${deleteItemTarget.name}" (حذف مرن).` : undefined
+          deleteItemTarget ? `سيُحذف الصنف "${deleteItemTarget.name}" نهائيًا مع معادلته (حذف نهائي). لقطات الفواتير السابقة لا تتأثر.` : undefined
         }
         confirmLabel="حذف"
         danger
@@ -831,7 +891,7 @@ export function ProductDetailPage() {
         open={deleteProductOpen}
         onOpenChange={setDeleteProductOpen}
         title="حذف المنتج؟"
-        description={`سيُحذف المنتج "${product.name}" (حذف مرن).`}
+        description={`سيُحذف المنتج "${product.name}" نهائيًا مع أصنافه ومعادلاتها (حذف نهائي).`}
         confirmLabel="حذف"
         danger
         busy={deleteProductMutation.isPending}

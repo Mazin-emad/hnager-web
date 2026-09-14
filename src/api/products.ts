@@ -55,7 +55,7 @@ export async function updateProduct(
   return res.data;
 }
 
-/** Soft delete. Requires `products:delete`. */
+/** Hard delete (items → formulas and product-variable links cascade). Requires `products:delete`. 204 empty body; second delete 404. */
 export async function deleteProduct(id: string): Promise<void> {
   await api.delete(`/api/v1/products/${id}`);
 }
@@ -146,7 +146,7 @@ export async function toggleItemActive(productId: string, id: string): Promise<v
   await api.patch(`/api/v1/products/${productId}/items/${id}/toggle-active`);
 }
 
-/** Soft delete. Requires `items:delete`. */
+/** Hard delete of the item and its 1:1 formula row (historical invoices keep snapshots). Requires `items:delete`. 204 empty body; second delete 404. */
 export async function deleteItem(productId: string, id: string): Promise<void> {
   await api.delete(`/api/v1/products/${productId}/items/${id}`);
 }

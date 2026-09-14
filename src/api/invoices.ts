@@ -81,9 +81,10 @@ export async function finalizeInvoice(id: string): Promise<InvoiceDetailResponse
 }
 
 /**
- * Draft-only delete. Requires `invoices:delete`.
- * Non-drafts fail with `422 Invoice.NotDraft`; a Member deleting someone
- * else's invoice fails with `403 Invoice.AccessDenied`.
+ * Hard delete (header + product/item lines cascade). Requires `invoices:delete`.
+ * Any status is deletable, including Finalized. Ownership still applies:
+ * a Member deleting someone else's invoice fails with `403 Invoice.AccessDenied`.
+ * Returns 204 with an empty body; a second delete returns 404.
  */
 export async function deleteInvoice(id: string): Promise<void> {
   await api.delete(`/api/v1/invoices/${id}`);
