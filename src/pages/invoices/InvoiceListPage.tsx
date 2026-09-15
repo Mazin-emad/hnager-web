@@ -112,7 +112,15 @@ export function InvoiceListPage() {
       void queryClient.invalidateQueries({ queryKey: ["invoices"] });
       navigate(`/invoices/${invoice.id}`);
     },
-    onError: (error) => toast.error(parseApiError(error).message),
+    onError: (error) => {
+      // TEMP-DEBUG: surface the raw 500 response body in the console.
+      // Remove after diagnosing the backend 500.
+      console.debug(
+        "POST /api/v1/invoices failed:",
+        (error as { response?: { status?: number; data?: unknown } })?.response,
+      );
+      toast.error(parseApiError(error).message);
+    },
   });
 
   const deleteMutation = useMutation({
@@ -164,8 +172,8 @@ export function InvoiceListPage() {
               </DialogHeader>
               <Form {...form}>
                 <form
-                  onSubmit={form.handleSubmit((values) =>
-                    createMutation.mutate({
+                  onSubmit={form.handleSubmit((values) => {
+                    const body = {
                       customerName: values.customerName.trim(),
                       invoiceType: values.invoiceType,
                       salesRepName: values.salesRepName.trim(),
@@ -173,8 +181,12 @@ export function InvoiceListPage() {
                       invoiceDate: values.invoiceDate,
                       discountPercent: values.discountPercent,
                       notes: values.notes?.trim() ? values.notes : null,
-                    }),
-                  )}
+                    };
+                    // TEMP-DEBUG: log the exact payload in the console.
+                    // Remove after diagnosing the backend 500.
+                    console.debug("POST /api/v1/invoices payload:", JSON.stringify(body));
+                    createMutation.mutate(body);
+                  })}
                   className="space-y-4"
                 >
                   <div className="grid gap-4 sm:grid-cols-2">
