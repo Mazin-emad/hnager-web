@@ -27,6 +27,10 @@ const CODE_MESSAGES: Record<string, string> = {
   "Variable.InvalidKey": "مفتاح المتغير غير صالح",
   "Variable.ReservedKey": "هذا المفتاح محجوز للنظام ولا يمكن استخدامه",
   "Variable.KeyInUseByFormula": "لا يمكن التعطيل — المفتاح مستخدم في معادلات",
+  // Permanent-delete 409s: the delete handler shows extensions.errors[1]
+  // verbatim (it names the blockers), these are fallbacks only.
+  "Variable.InUseByProducts": "لا يمكن الحذف — المتغير مسند إلى منتجات",
+  "Variable.ReferencedByInvoices": "لا يمكن الحذف — فواتير سابقة تشير إلى هذا المتغير، عطّله بدلًا من حذفه",
   "Variable.InUseByFormula": "لا يمكن الحذف — المتغير مستخدم في معادلات",
   "Variable.VariableInUse": "لا يمكن الحذف — المتغير مستخدم في معادلات",
   "Formula.VariableInUse": "لا يمكن الحذف — المتغير مستخدم في معادلات",
@@ -36,6 +40,7 @@ const CODE_MESSAGES: Record<string, string> = {
   "Item.NotFound": "الصنف غير موجود",
   "Item.ProductNotFound": "المنتج الأب غير موجود",
   "Item.PriceCannotBeNegative": "سعر البيع/الشراء لا يمكن أن يكون سالبًا",
+  "Item.InvalidQuantityMultiplier": "مضاعف الكمية غير صالح — اختر كمية المنتج أو عدد الخطوط",
   "Item.PriceChangeNotAllowed": "لا تملك صلاحية تغيير أسعار الأصناف",
   "Formula.NotFound": "المعادلة غير موجودة",
   "Formula.ParseFailed": "تعذّر تحليل المعادلة",

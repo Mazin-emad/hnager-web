@@ -82,6 +82,9 @@ const itemSchema = z.object({
   code: z.string().max(100).optional().or(z.literal("")),
   salesPrice: z.coerce.number().min(0, "سعر البيع لا يكون سالبًا"),
   purchasePrice: z.coerce.number().min(0, "سعر الشراء لا يكون سالبًا"),
+  quantityMultiplier: z.enum(["ProductQuantity", "LinesCount"], {
+    message: "اختر مضاعف الكمية",
+  }),
   displayOrder: z.coerce.number().min(0, "لا يقل عن 0"),
 });
 
@@ -114,6 +117,7 @@ function ItemDialog({
       code: item?.code ?? "",
       salesPrice: item?.salesPrice ?? 0,
       purchasePrice: item?.purchasePrice ?? 0,
+      quantityMultiplier: item?.quantityMultiplier ?? "ProductQuantity",
       displayOrder: item?.displayOrder ?? 0,
     },
   });
@@ -128,6 +132,7 @@ function ItemDialog({
         code: values.code?.trim() ? values.code.trim() : null,
         salesPrice: canChangePrice ? values.salesPrice : (item?.salesPrice ?? values.salesPrice),
         purchasePrice: canChangePrice ? values.purchasePrice : (item?.purchasePrice ?? values.purchasePrice),
+        quantityMultiplier: values.quantityMultiplier,
         displayOrder: values.displayOrder,
       };
       return isEdit
@@ -251,6 +256,30 @@ function ItemDialog({
                 )}
               />
             </div>
+            <FormField
+              control={form.control}
+              name="quantityMultiplier"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>مضاعف الكمية</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="اختر مضاعف الكمية" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="ProductQuantity">كمية المنتج (Product quantity)</SelectItem>
+                      <SelectItem value="LinesCount">عدد الخطوط (Lines count)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                  <p className="text-xs text-muted-foreground">
+                    يحدد ما يُضرب به العدد (بعد التقريب لأعلى) لحساب إجمالي العدد.
+                  </p>
+                </FormItem>
+              )}
+            />
             {isEdit && !canChangePrice && (
               <p className="rounded-xl bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
                 لا تملك صلاحية تغيير الأسعار — يمكنك تعديل الاسم والترتيب فقط.
@@ -724,6 +753,7 @@ export function ProductDetailPage() {
                     <TableHead>الاسم</TableHead>
                     <TableHead className="text-left">سعر البيع</TableHead>
                     <TableHead className="text-left">سعر الشراء</TableHead>
+                    <TableHead>مضاعف الكمية</TableHead>
                     <TableHead>المعادلة</TableHead>
                     <TableHead>الحالة</TableHead>
                     {(isAdmin || canDeleteItem) && <TableHead className="w-40">إجراءات</TableHead>}
@@ -748,6 +778,11 @@ export function ProductDetailPage() {
                       </TableCell>
                       <TableCell className="tnum text-left">
                         {fmtMoney(item.purchasePrice)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="whitespace-nowrap">
+                          {item.quantityMultiplier === "LinesCount" ? "عدد الخطوط" : "كمية المنتج"}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         {item.formula ? (

@@ -73,7 +73,6 @@ export function VisualPage() {
           <SelectContent>
             <SelectItem value="Sales">مبيعات</SelectItem>
             <SelectItem value="Purchases">مشتريات</SelectItem>
-            <SelectItem value="Returns">مرتجع</SelectItem>
           </SelectContent>
         </Select>
         <DropdownMenu defaultOpen>
@@ -122,7 +121,6 @@ export function VisualPage() {
                 <SelectContent>
                   <SelectItem value="Sales">مبيعات</SelectItem>
                   <SelectItem value="Purchases">مشتريات</SelectItem>
-                  <SelectItem value="Returns">مرتجع</SelectItem>
                 </SelectContent>
               </Select>
             </div>

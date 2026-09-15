@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { createInvoice, deleteInvoice, invoiceKeys, listInvoices } from "@/api/invoices";
 import { parseApiError } from "@/api/errors";
 import type { InvoiceFilters, InvoiceListItem, InvoiceStatus, InvoiceType } from "@/api/types";
-import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS } from "@/lib/labels";
+import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS, counterpartyNameLabel } from "@/lib/labels";
 import { fmtDate, fmtMoney, todayIso } from "@/lib/format";
 import { useAuth } from "@/auth/AuthContext";
 import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
@@ -54,8 +54,8 @@ import {
 const PAGE_SIZE = 20;
 
 const draftSchema = z.object({
-  customerName: z.string().min(1, "اسم العميل مطلوب").max(300, "حد أقصى 300 حرف"),
-  invoiceType: z.enum(["Sales", "Purchases", "Returns"], { message: "اختر نوع الفاتورة" }),
+  customerName: z.string().min(1, "الاسم مطلوب").max(300, "حد أقصى 300 حرف"),
+  invoiceType: z.enum(["Sales", "Purchases"], { message: "اختر نوع الفاتورة" }),
   salesRepName: z.string().min(1, "اسم المندوب مطلوب").max(300, "حد أقصى 300 حرف"),
   day: z.string().max(100).optional().or(z.literal("")),
   invoiceDate: z.string().min(1, "التاريخ مطلوب"),
@@ -133,6 +133,9 @@ export function InvoiceListPage() {
     setFilters((f) => ({ ...f, customerName: searchInput || undefined, page: 1 }));
   }
 
+  // Drives the customer/supplier label switch in the create dialog.
+  const watchedInvoiceType = form.watch("invoiceType");
+
   const totalPages = listQuery.data
     ? Math.max(1, Math.ceil(listQuery.data.totalCount / (filters.pageSize ?? PAGE_SIZE)))
     : 1;
@@ -141,7 +144,7 @@ export function InvoiceListPage() {
     <div>
       <PageHeader
         title="الفواتير"
-        subtitle="إنشاء ومتابعة فواتير المبيعات والمشتريات والمرتجع"
+        subtitle="إنشاء ومتابعة فواتير المبيعات والمشتريات"
         actions={
           <Dialog open={createOpen} onOpenChange={setCreateOpen}>
             <DialogTrigger
@@ -180,9 +183,9 @@ export function InvoiceListPage() {
                       name="customerName"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>اسم العميل</FormLabel>
+                          <FormLabel>{counterpartyNameLabel(watchedInvoiceType)}</FormLabel>
                           <FormControl>
-                            <Input {...field} placeholder="اسم العميل" />
+                            <Input {...field} placeholder={counterpartyNameLabel(watchedInvoiceType)} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -322,7 +325,7 @@ export function InvoiceListPage() {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && applySearch()}
-              placeholder="بحث باسم العميل…"
+              placeholder="بحث بالاسم…"
               className="pe-9"
             />
           </div>
@@ -407,7 +410,7 @@ export function InvoiceListPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>رقم الفاتورة</TableHead>
-                    <TableHead>العميل</TableHead>
+                    <TableHead>العميل / المورد</TableHead>
                     <TableHead>النوع</TableHead>
                     <TableHead>التاريخ</TableHead>
                     <TableHead>الحالة</TableHead>

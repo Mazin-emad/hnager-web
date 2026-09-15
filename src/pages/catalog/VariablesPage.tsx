@@ -14,7 +14,7 @@ import {
   updateVariable,
   variableKeys,
 } from "@/api/variables";
-import { parseApiError } from "@/api/errors";
+import { parseApiError, getServerErrorDetail } from "@/api/errors";
 import { LINES_COUNT_KEY, type VariableResponse } from "@/api/types";
 import { useAuth } from "@/auth/AuthContext";
 import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
@@ -229,13 +229,16 @@ export function VariablesPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteVariable(id),
     onSuccess: () => {
-      toast.success("تم حذف المتغير");
+      toast.success("تم حذف المتغير نهائيًا");
       setDeleteTarget(null);
       void queryClient.invalidateQueries({ queryKey: ["variables"] });
     },
     onError: (error) => {
       setDeleteTarget(null);
-      toast.error(parseApiError(error).message);
+      // 409 blockers (InUseByProducts / KeyInUseByFormula /
+      // ReferencedByInvoices) carry the exact fix in extensions.errors[1] —
+      // show it verbatim; fall back to the mapped message otherwise.
+      toast.error(getServerErrorDetail(error) ?? parseApiError(error).message);
     },
   });
 
@@ -347,8 +350,8 @@ export function VariablesPage() {
                               size="icon"
                               className="text-destructive hover:text-destructive"
                               onClick={() => setDeleteTarget(v)}
-                              aria-label="حذف"
-                              title="حذف المتغير"
+                              aria-label="حذف نهائي"
+                              title="حذف نهائي للمتغير (لا يمكن التراجع)"
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -367,13 +370,13 @@ export function VariablesPage() {
       <ConfirmAction
         open={deleteTarget != null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
-        title="حذف المتغير؟"
+        title="حذف نهائي للمتغير؟"
         description={
           deleteTarget
-            ? `سيُعطّل المتغير "${deleteTarget.name}" (${deleteTarget.key}) — حذف مرن (يبقى الصف، وحذف المعطّل مجددًا آمن). يُمنع التعطيل إذا كان المفتاح مستخدمًا في معادلة نشطة.`
+            ? `سيُحذف المتغير "${deleteTarget.name}" (${deleteTarget.key}) نهائيًا ولا يمكن التراجع عن ذلك. إذا كان مستخدمًا في منتجات أو معادلات أو فواتير سابقة، ستظهر رسالة توضح المطلوب — ويمكنك تعطيله بدلًا من حذفه.`
             : undefined
         }
-        confirmLabel="حذف"
+        confirmLabel="حذف نهائي"
         danger
         busy={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}

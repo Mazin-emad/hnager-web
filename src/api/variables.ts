@@ -40,10 +40,14 @@ export async function toggleVariableActive(id: string): Promise<void> {
 }
 
 /**
- * Soft delete (sets isActive = false, never removes the row). Requires
- * `variables:delete`. Idempotent: deleting an already-inactive variable
- * still returns 204. Blocked with `409 Variable.KeyInUseByFormula` when
- * referenced by an active formula.
+ * Permanent (hard) delete of the variable row. Requires `variables:delete`.
+ * 204 empty body on success — the row is gone; refetch the list / drop it
+ * from local state. Deleting an already-deleted/unknown id returns
+ * `404 Variable.NotFound` (not idempotent). Refused with
+ * `409 Variable.InUseByProducts` / `Variable.KeyInUseByFormula` /
+ * `Variable.ReferencedByInvoices` when anything references the variable —
+ * show `extensions.errors[1]` verbatim, it names the blockers.
+ * For a reversible alternative use `toggleVariableActive` (unchanged).
  */
 export async function deleteVariable(id: string): Promise<void> {
   await api.delete(`/api/v1/variables/${id}`);

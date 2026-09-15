@@ -2,9 +2,18 @@
 // JSON uses camelCase. Enums are serialized as strings.
 // Dates: DateOnly as YYYY-MM-DD, datetimes ISO-8601.
 
-export type InvoiceType = "Sales" | "Purchases" | "Returns";
+export type InvoiceType = "Sales" | "Purchases";
 export type InvoiceStatus = "Draft" | "Finalized" | "Cancelled";
 export type VariableType = "Number";
+
+/**
+ * Item quantity multiplier — controls how an item's ceiling-rounded quantity
+ * scales to the billable total: `totalQuantity = CEILING(raw) × multiplier`.
+ * - `ProductQuantity`: multiply by the product quantity (default)
+ * - `LinesCount`: multiply by the lines count
+ * Serialized as strings over the wire.
+ */
+export type QuantityMultiplier = "ProductQuantity" | "LinesCount";
 
 /**
  * Reserved, case-sensitive variable key computed server-side for item
@@ -187,10 +196,15 @@ export interface ItemDetailResponse {
   productId: string;
   name: string;
   code: string | null;
-  /** سعر البيع — used for Sales and Returns invoices. Required, ≥ 0. */
+  /** سعر البيع — used for Sales invoices. Required, ≥ 0. */
   salesPrice: number;
   /** سعر الشراء — used for Purchase invoices. Required, ≥ 0. */
   purchasePrice: number;
+  /**
+   * Which value scales the ceiling-rounded item quantity to the billable
+   * total (`ProductQuantity` or `LinesCount`). Required on create/update.
+   */
+  quantityMultiplier: QuantityMultiplier;
   isActive: boolean;
   displayOrder: number;
   formula: FormulaResponse | null;
@@ -221,6 +235,8 @@ export interface CreateItemRequest {
   salesPrice: number;
   /** سعر الشراء — required, ≥ 0. */
   purchasePrice: number;
+  /** Required — must be "ProductQuantity" or "LinesCount" (omitting it is a 400). */
+  quantityMultiplier: QuantityMultiplier;
   displayOrder: number;
 }
 
@@ -332,20 +348,36 @@ export interface InvoiceItemSnapshot {
   itemNameSnapshot: string;
   /**
    * Backend-resolved price for the invoice's type (single "السعر" column):
-   * salesPrice for Sales/Returns, purchasePrice for Purchases.
+   * salesPrice for Sales, purchasePrice for Purchases.
    * Stale until Recalculate or an invoice-type change re-prices the lines.
    */
   unitPriceSnapshot: number;
   formulaSnapshot: string | null;
   formulaVersion: number | null;
   /**
-   * Raw item-formula result BEFORE the product-quantity multiplier (4dp).
-   * `0` on pre-feature invoices means "not recorded", not a real zero.
+   * Raw item-formula result (fractional, e.g. 2.3). Audit-only —
+   * never display this in the UI or PDF.
    */
   formulaResultSnapshot: number;
   /**
-   * Total billable quantity = formulaResultSnapshot × productQuantity.
-   * (Meaning changed by the backend quantity-formula feature.)
+   * CEILING(formulaResultSnapshot) — the rounded per-unit quantity.
+   * Display this as العدد. Optional for tolerance toward cached
+   * pre-feature payloads (which lack it); render "—" when absent.
+   */
+  itemQuantitySnapshot?: number;
+  /**
+   * Which multiplier was applied for this line. Internal/audit-only —
+   * never display.
+   */
+  quantityMultiplierTypeSnapshot?: QuantityMultiplier;
+  /**
+   * The multiplier value used (product quantity or lines count).
+   * Internal/audit-only — never display.
+   */
+  multiplierValueSnapshot?: number;
+  /**
+   * Total billable quantity = itemQuantitySnapshot × multiplier value.
+   * Display this as إجمالي العدد.
    */
   quantitySnapshot: number;
   totalPriceSnapshot: number;

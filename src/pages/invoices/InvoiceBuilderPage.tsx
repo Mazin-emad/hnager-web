@@ -36,7 +36,7 @@ import { getProductConfiguration, listProducts, productKeys } from "@/api/produc
 import { parseApiError } from "@/api/errors";
 import type { AddInvoiceProductRequest, InvoiceDetailResponse, InvoiceType } from "@/api/types";
 import { useAuth } from "@/auth/AuthContext";
-import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS } from "@/lib/labels";
+import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS, counterpartyLabel, counterpartyNameLabel } from "@/lib/labels";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum } from "@/lib/format";
 import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
@@ -78,8 +78,8 @@ import {
 } from "@/components/ui/table";
 
 const headerSchema = z.object({
-  customerName: z.string().min(1, "اسم العميل مطلوب").max(300),
-  invoiceType: z.enum(["Sales", "Purchases", "Returns"]),
+  customerName: z.string().min(1, "الاسم مطلوب").max(300),
+  invoiceType: z.enum(["Sales", "Purchases"]),
   salesRepName: z.string().min(1, "اسم المندوب مطلوب").max(300),
   day: z.string().max(100).optional().or(z.literal("")),
   invoiceDate: z.string().min(1, "التاريخ مطلوب"),
@@ -330,7 +330,7 @@ function EditHeaderDialog({ invoice }: { invoice: InvoiceDetailResponse }) {
                 name="customerName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>اسم العميل</FormLabel>
+                    <FormLabel>{counterpartyNameLabel(form.watch("invoiceType"))}</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -683,7 +683,7 @@ export function InvoiceBuilderPage() {
         </CardHeader>
         <CardContent>
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            <div><dt className="text-muted-foreground">العميل</dt><dd className="font-semibold">{invoice.customerName}</dd></div>
+            <div><dt className="text-muted-foreground">{counterpartyLabel(invoice.invoiceType)}</dt><dd className="font-semibold">{invoice.customerName}</dd></div>
             <div><dt className="text-muted-foreground">المندوب</dt><dd className="font-semibold">{invoice.salesRepName}</dd></div>
             <div><dt className="text-muted-foreground">النوع</dt><dd className="font-semibold">{INVOICE_TYPE_LABELS[invoice.invoiceType]}</dd></div>
             <div><dt className="text-muted-foreground">التاريخ</dt><dd className="tnum font-semibold">{fmtDate(invoice.invoiceDate)}{invoice.day ? ` — ${WEEKDAY_LABELS[invoice.day] ?? invoice.day}` : ""}</dd></div>
@@ -802,7 +802,7 @@ export function InvoiceBuilderPage() {
                           <TableHead>الصنف</TableHead>
                           <TableHead className="text-left">عدد</TableHead>
                           <TableHead className="text-left">اجمالي العدد</TableHead>
-                          <TableHead className="text-left" title="السعر المحسوم لنوع هذه الفاتورة: سعر البيع للمبيعات والمرتجع، وسعر الشراء للمشتريات">السعر</TableHead>
+                          <TableHead className="text-left" title="السعر المحسوم لنوع هذه الفاتورة: سعر البيع للمبيعات، وسعر الشراء للمشتريات">السعر</TableHead>
                           <TableHead className="text-left">السعر الإجمالي</TableHead>
                           {isDraft && <TableHead className="w-24">الحالة</TableHead>}
                         </TableRow>
@@ -814,44 +814,25 @@ export function InvoiceBuilderPage() {
                             <TableRow key={item.id} className={item.isExcluded ? "opacity-50" : undefined}>
                               <TableCell>
                                 <p className="font-medium">{item.itemNameSnapshot}</p>
-                                {item.formulaSnapshot && (
-                                  <p className="tnum text-xs text-muted-foreground" dir="ltr">
-                                    {item.formulaSnapshot}
-                                  </p>
-                                )}
                               </TableCell>
-                              {(() => {
-                                // formulaResultSnapshot 0 with a nonzero quantity means
-                                // "not recorded" (pre-feature invoice) — don't show
-                                // misleading math in that case.
-                                const recorded =
-                                  item.formulaResultSnapshot !== 0 || item.quantitySnapshot === 0;
-                                return (
-                                  <>
-                                    <TableCell
-                                      className="tnum text-left"
-                                      title={
-                                        recorded
-                                          ? `ناتج معادلة الصنف قبل مضاعف كمية المنتج`
-                                          : "العدد قبل ميزة معادلة الكمية — أعد الحساب لتعبئته"
-                                      }
-                                    >
-                                      {recorded ? fmtNum(item.formulaResultSnapshot) : "—"}
-                                    </TableCell>
-                                    <TableCell
-                                      className="tnum text-left"
-                                      title={
-                                        recorded
-                                          ? `ناتج المعادلة ${fmtNum(item.formulaResultSnapshot)} × كمية المنتج ${fmtNum(block.productQuantity)}`
-                                          : "الكمية قبل ميزة معادلة الكمية — أعد الحساب لتعبئتها"
-                                      }
-                                    >
-                                      {fmtNum(item.quantitySnapshot)}
-                                    </TableCell>
-                                    <TableCell className="tnum text-left">{fmtMoney(item.unitPriceSnapshot)}</TableCell>
-                                  </>
-                                );
-                              })()}
+                              {/* العدد = CEILING(raw). Never render formulaResultSnapshot
+                                  (raw, audit-only), formulaSnapshot, or the multiplier
+                                  snapshots — they are internal details. */}
+                              <TableCell
+                                className="tnum text-left"
+                                title="العدد بعد التقريب لأعلى"
+                              >
+                                {item.itemQuantitySnapshot != null
+                                  ? fmtNum(item.itemQuantitySnapshot)
+                                  : "—"}
+                              </TableCell>
+                              <TableCell
+                                className="tnum text-left"
+                                title="إجمالي العدد"
+                              >
+                                {fmtNum(item.quantitySnapshot)}
+                              </TableCell>
+                              <TableCell className="tnum text-left">{fmtMoney(item.unitPriceSnapshot)}</TableCell>
                               <TableCell className="tnum text-left font-semibold">
                                 {fmtMoney(item.totalPriceSnapshot)}
                               </TableCell>

@@ -3,8 +3,20 @@ import type { InvoiceStatus, InvoiceType } from "@/api/types";
 export const INVOICE_TYPE_LABELS: Record<InvoiceType, string> = {
   Sales: "مبيعات",
   Purchases: "مشتريات",
-  Returns: "مرتجع",
 };
+
+/**
+ * Counterparty label: purchases are made FROM a supplier (المورد),
+ * sales are made TO a customer (عميل).
+ */
+export function counterpartyLabel(invoiceType: InvoiceType): "المورد" | "العميل" {
+  return invoiceType === "Purchases" ? "المورد" : "العميل";
+}
+
+/** "اسم المورد" for Purchases, "اسم العميل" for Sales. */
+export function counterpartyNameLabel(invoiceType: InvoiceType): string {
+  return `اسم ${counterpartyLabel(invoiceType)}`;
+}
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   Draft: "مسودة",
