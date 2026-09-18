@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Inbox, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Inbox } from "lucide-react";
 import { getReceivedInvoices, invoiceKeys } from "@/api/invoices";
 import { parseApiError } from "@/api/errors";
 import type { ReceivedInvoicePeriod, ReceivedInvoicesFilterRequest } from "@/api/types";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, RECEIVED_PERIOD_LABELS } from "@/lib/labels";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/format";
+import { useInvoiceViewPrefs } from "@/lib/invoiceViewPrefs";
+import { InvoiceViewToggle } from "@/components/invoices/InvoiceViewToggle";
 import { EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,12 +34,16 @@ export function ReceivedInvoicesPage() {
   const [period, setPeriod] = useState<ReceivedInvoicePeriod | undefined>(undefined);
   const [fromLocal, setFromLocal] = useState("");
   const [toLocal, setToLocal] = useState("");
-  const [senderInput, setSenderInput] = useState("");
   const [page, setPage] = useState(1);
   const [applied, setApplied] = useState<ReceivedInvoicesFilterRequest>({
     page: 1,
     pageSize: PAGE_SIZE,
   });
+  const [viewPrefs, setViewPrefs] = useInvoiceViewPrefs();
+  const brief = viewPrefs.briefDetails;
+  // Same user-chosen brief field set as the owner's list; only the columns
+  // this screen actually has (incl. owner/sharedAt) can render.
+  const briefSet = new Set(viewPrefs.briefFields);
 
   const listQuery = useQuery({
     queryKey: invoiceKeys.received(applied),
@@ -49,7 +55,6 @@ export function ReceivedInvoicesPage() {
     const toDate = toIso(toLocal);
     setPage(1);
     setApplied({
-      fromUserId: senderInput.trim() || undefined,
       fromDate,
       toDate,
       // Explicit bounds win per bound — if the user typed a custom range,
@@ -65,7 +70,6 @@ export function ReceivedInvoicesPage() {
     setPeriod(undefined);
     setFromLocal("");
     setToLocal("");
-    setSenderInput("");
     setPage(1);
     setApplied({ page: 1, pageSize: PAGE_SIZE });
   }
@@ -83,7 +87,7 @@ export function ReceivedInvoicesPage() {
     <div>
       <PageHeader
         title="الفواتير المرسلة لي"
-        subtitle="الفواتير التي شاركها معك مالكوها — عرض فقط"
+        subtitle="الفواتير التي شاركها معك الآخرون — يمكنك تعديلها كما يعدّلها المالك (الحذف للمالك فقط)"
       />
 
       <Card className="mb-4">
@@ -116,7 +120,7 @@ export function ReceivedInvoicesPage() {
               </Button>
             ))}
           </div>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
             <div className="space-y-1.5">
               <Label htmlFor="recv-from">من تاريخ الاستلام</Label>
               <Input
@@ -137,35 +141,33 @@ export function ReceivedInvoicesPage() {
                 className="tnum"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="recv-sender">المرسِل (معرف المستخدم)</Label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute end-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="recv-sender"
-                  dir="ltr"
-                  placeholder="sender user id"
-                  value={senderInput}
-                  onChange={(e) => setSenderInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && apply()}
-                  className="tnum pe-9 text-left"
-                />
-              </div>
+            <div className="flex gap-2 sm:col-span-2 lg:col-span-1">
+              <Button onClick={apply} className="flex-1 bg-brand-800 hover:bg-brand-900 lg:flex-none">
+                بحث
+              </Button>
+              <Button variant="outline" onClick={reset} className="flex-1 lg:flex-none">
+                مسح
+              </Button>
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            الترشيح بالتاريخ والمرسِل يتم على وقت الاستلام (sharedAt) — لا على تاريخ إنشاء الفاتورة.
+            الترشيح بالتاريخ يتم على وقت الاستلام (sharedAt) — لا على تاريخ إنشاء الفاتورة.
           </p>
-          <div className="flex gap-2">
-            <Button onClick={apply} className="bg-brand-800 hover:bg-brand-900">
-              بحث
-            </Button>
-            <Button variant="outline" onClick={reset}>
-              مسح
-            </Button>
-          </div>
         </CardContent>
       </Card>
+
+      {/* Brief-details switch (display control; the field set lives in settings) */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={viewPrefs.briefDetails}
+            onChange={(e) => setViewPrefs({ briefDetails: e.target.checked })}
+            className="size-4 accent-brand-800"
+          />
+          تفاصيل مختصرة (الحقول المختارة في الإعدادات — بدون الرقم)
+        </label>
+      </div>
 
       {listQuery.isPending ? (
         <TableSkeleton rows={6} cols={6} />
@@ -182,19 +184,120 @@ export function ReceivedInvoicesPage() {
         />
       ) : (
         <>
+          {viewPrefs.viewMode === "cards" ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {listQuery.data.items.map((inv) => (
+                <Card
+                  key={inv.shareId}
+                  className="cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() =>
+                    navigate(
+                      `/invoices/${inv.invoiceId}?received=1&owner=${encodeURIComponent(inv.ownerUserId)}&sharedAt=${encodeURIComponent(inv.sharedAt)}`,
+                    )
+                  }
+                >
+                  <CardContent className="space-y-3 pt-6">
+                    {brief ? (
+                      <>
+                        {briefSet.has("customerName") && (
+                          <p className="min-w-0 truncate font-semibold">{inv.customerName}</p>
+                        )}
+                        {(briefSet.has("type") || briefSet.has("status")) && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {briefSet.has("type") && (
+                              <Badge variant="outline" className="shrink-0">
+                                {INVOICE_TYPE_LABELS[inv.invoiceType]}
+                              </Badge>
+                            )}
+                            {briefSet.has("status") && (
+                              <Badge
+                                variant={inv.status === "Draft" ? "secondary" : "default"}
+                                className="shrink-0"
+                              >
+                                {INVOICE_STATUS_LABELS[inv.status]}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                        {briefSet.has("invoiceDate") && (
+                          <p className="tnum text-sm text-muted-foreground">
+                            الفاتورة: {fmtDate(inv.invoiceDate)}
+                          </p>
+                        )}
+                        {briefSet.has("sharedAt") && (
+                          <p className="tnum text-sm text-muted-foreground">
+                            الاستلام: {fmtDateTime(inv.sharedAt)}
+                          </p>
+                        )}
+                        {briefSet.has("owner") && (
+                          <p className="tnum truncate text-xs text-muted-foreground" dir="ltr" title={inv.ownerUserId}>
+                            {inv.ownerUserId}
+                          </p>
+                        )}
+                        {briefSet.has("grandTotal") && (
+                          <p className="tnum text-xl font-bold text-brand-900">
+                            {fmtMoney(inv.grandTotal)}
+                          </p>
+                        )}
+                        {!briefSet.has("customerName") &&
+                          !briefSet.has("type") &&
+                          !briefSet.has("status") &&
+                          !briefSet.has("invoiceDate") &&
+                          !briefSet.has("sharedAt") &&
+                          !briefSet.has("owner") &&
+                          !briefSet.has("grandTotal") && (
+                            <p className="text-sm text-muted-foreground">
+                              اختر حقلًا واحدًا على الأقل للتفاصيل المختصرة من الإعدادات.
+                            </p>
+                          )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 flex-1 truncate font-semibold">{inv.customerName}</p>
+                          <Badge variant="outline" className="shrink-0">
+                            {INVOICE_TYPE_LABELS[inv.invoiceType]}
+                          </Badge>
+                        </div>
+                        <p className="tnum text-sm text-muted-foreground">
+                          الفاتورة: {fmtDate(inv.invoiceDate)}
+                        </p>
+                        <p className="tnum text-sm text-muted-foreground">
+                          الاستلام: {fmtDateTime(inv.sharedAt)}
+                        </p>
+                        <p className="tnum truncate text-xs text-muted-foreground" dir="ltr" title={inv.ownerUserId}>
+                          {inv.ownerUserId}
+                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="tnum text-xl font-bold text-brand-900">
+                            {fmtMoney(inv.grandTotal)}
+                          </p>
+                          <Badge variant={inv.status === "Draft" ? "secondary" : "default"}>
+                            {INVOICE_STATUS_LABELS[inv.status]}
+                          </Badge>
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
           <Card>
             <CardContent className="overflow-x-auto p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>رقم الفاتورة</TableHead>
-                    <TableHead>العميل / المورد</TableHead>
-                    <TableHead>النوع</TableHead>
-                    <TableHead>تاريخ الفاتورة</TableHead>
-                    <TableHead>تاريخ الاستلام</TableHead>
-                    <TableHead>المالك / المرسِل</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    <TableHead className="text-left">الإجمالي</TableHead>
+                    {!brief && <TableHead>رقم الفاتورة</TableHead>}
+                    {(!brief || briefSet.has("customerName")) && <TableHead>العميل / المورد</TableHead>}
+                    {(!brief || briefSet.has("type")) && <TableHead>النوع</TableHead>}
+                    {(!brief || briefSet.has("invoiceDate")) && <TableHead>تاريخ الفاتورة</TableHead>}
+                    {(!brief || briefSet.has("sharedAt")) && <TableHead>تاريخ الاستلام</TableHead>}
+                    {(!brief || briefSet.has("owner")) && <TableHead>المالك / المرسِل</TableHead>}
+                    {(!brief || briefSet.has("status")) && <TableHead>الحالة</TableHead>}
+                    {(!brief || briefSet.has("grandTotal")) && (
+                      <TableHead className="text-left">الإجمالي</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -208,35 +311,54 @@ export function ReceivedInvoicesPage() {
                         )
                       }
                     >
-                      <TableCell className="tnum font-semibold text-brand-800" dir="ltr">
-                        {inv.invoiceNumber}
-                      </TableCell>
-                      <TableCell>{inv.customerName}</TableCell>
-                      <TableCell>{INVOICE_TYPE_LABELS[inv.invoiceType]}</TableCell>
-                      <TableCell className="tnum">{fmtDate(inv.invoiceDate)}</TableCell>
-                      <TableCell className="tnum">{fmtDateTime(inv.sharedAt)}</TableCell>
-                      <TableCell className="tnum max-w-40 truncate text-xs" dir="ltr" title={inv.ownerUserId}>
-                        {inv.ownerUserId}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={inv.status === "Draft" ? "secondary" : "default"}>
-                          {INVOICE_STATUS_LABELS[inv.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="tnum text-left font-semibold">
-                        {fmtMoney(inv.grandTotal)}
-                      </TableCell>
+                      {!brief && (
+                        <TableCell className="tnum font-semibold text-brand-800" dir="ltr">
+                          {inv.invoiceNumber}
+                        </TableCell>
+                      )}
+                      {(!brief || briefSet.has("customerName")) && <TableCell>{inv.customerName}</TableCell>}
+                      {(!brief || briefSet.has("type")) && (
+                        <TableCell>{INVOICE_TYPE_LABELS[inv.invoiceType]}</TableCell>
+                      )}
+                      {(!brief || briefSet.has("invoiceDate")) && (
+                        <TableCell className="tnum">{fmtDate(inv.invoiceDate)}</TableCell>
+                      )}
+                      {(!brief || briefSet.has("sharedAt")) && (
+                        <TableCell className="tnum">{fmtDateTime(inv.sharedAt)}</TableCell>
+                      )}
+                      {(!brief || briefSet.has("owner")) && (
+                        <TableCell className="tnum max-w-40 truncate text-xs" dir="ltr" title={inv.ownerUserId}>
+                          {inv.ownerUserId}
+                        </TableCell>
+                      )}
+                      {(!brief || briefSet.has("status")) && (
+                        <TableCell>
+                          <Badge variant={inv.status === "Draft" ? "secondary" : "default"}>
+                            {INVOICE_STATUS_LABELS[inv.status]}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {(!brief || briefSet.has("grandTotal")) && (
+                        <TableCell className="tnum text-left font-semibold">
+                          {fmtMoney(inv.grandTotal)}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
-          <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+          )}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
             <span className="tnum">
               صفحة {page} من {totalPages} — الإجمالي {listQuery.data.totalCount}
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <InvoiceViewToggle
+                value={viewPrefs.viewMode}
+                onChange={(viewMode) => setViewPrefs({ viewMode })}
+              />
               <Button
                 variant="outline"
                 size="icon"

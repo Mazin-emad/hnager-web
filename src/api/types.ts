@@ -86,6 +86,17 @@ export interface UserResponse {
   roles: string[];
 }
 
+/**
+ * Privacy-safe member directory entry for the share-recipient picker.
+ * GET /api/Users/directory — active (non-disabled) users only, minimal fields.
+ */
+export interface MemberDirectoryResponse {
+  id: string;
+  firstName: string;
+  lastName: string;
+  userName: string;
+}
+
 export interface CreateUserRequest {
   firstName: string;
   lastName: string;
@@ -448,6 +459,8 @@ export interface InvoiceDetailResponse {
   grandTotal: number;
   createdAt: string;
   finalizedAt: string | null;
+  /** Base64 row version — send back as the `If-Match` header on every mutation (§8). */
+  rowVersion: string;
   products: InvoiceProductBlock[];
 }
 

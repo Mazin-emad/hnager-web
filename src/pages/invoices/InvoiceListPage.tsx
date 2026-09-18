@@ -11,6 +11,7 @@ import {
   FilePlus2,
   FileText,
   Search,
+  Share2,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,7 +35,10 @@ import {
   counterpartyNameLabel,
 } from "@/lib/labels";
 import { fmtDate, fmtMoney, todayIso } from "@/lib/format";
+import { useInvoiceViewPrefs } from "@/lib/invoiceViewPrefs";
 import { useAuth } from "@/auth/AuthContext";
+import { InvoiceViewToggle } from "@/components/invoices/InvoiceViewToggle";
+import { ShareInvoiceDialog } from "@/components/invoices/ShareInvoiceDialog";
 import {
   ConfirmAction,
   EmptyState,
@@ -122,6 +126,14 @@ export function InvoiceListPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
   const canDelete = hasPermission("invoices:delete");
+  // Same client-side pattern as delete: permission gating here, the backend
+  // re-checks access (owner, share recipient, or Admin) and returns 403 otherwise.
+  const canShare = hasPermission("invoices:share");
+  const [viewPrefs, setViewPrefs] = useInvoiceViewPrefs();
+  const brief = viewPrefs.briefDetails;
+  // User-chosen brief field set (settings page). The invoice number is never
+  // a choice and never renders in brief mode.
+  const briefSet = new Set(viewPrefs.briefFields);
   const [filters, setFilters] = useState<InvoiceFilters>({
     page: 1,
     pageSize: PAGE_SIZE,
@@ -131,6 +143,7 @@ export function InvoiceListPage() {
   const [deleteTarget, setDeleteTarget] = useState<InvoiceListItem | null>(
     null,
   );
+  const [shareTarget, setShareTarget] = useState<InvoiceListItem | null>(null);
 
   const listQuery = useQuery({
     queryKey: invoiceKeys.list(filters),
@@ -489,6 +502,19 @@ export function InvoiceListPage() {
         </CardContent>
       </Card>
 
+      {/* Brief-details switch (display control; the field set lives in settings) */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="flex cursor-pointer items-center gap-1.5 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={viewPrefs.briefDetails}
+            onChange={(e) => setViewPrefs({ briefDetails: e.target.checked })}
+            className="size-4 accent-brand-800"
+          />
+          تفاصيل مختصرة (الحقول المختارة في الإعدادات — بدون الرقم)
+        </label>
+      </div>
+
       {/* List */}
       {listQuery.isPending ? (
         <TableSkeleton rows={6} cols={5} />
@@ -505,52 +531,83 @@ export function InvoiceListPage() {
         />
       ) : (
         <>
-          <Card>
-            <CardContent className="overflow-x-auto p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>رقم الفاتورة</TableHead>
-                    <TableHead>العميل / المورد</TableHead>
-                    <TableHead>النوع</TableHead>
-                    <TableHead>التاريخ</TableHead>
-                    <TableHead>الحالة</TableHead>
-                    <TableHead className="text-left">الإجمالي</TableHead>
-                    {canDelete && (
-                      <TableHead className="w-20">إجراءات</TableHead>
+          {viewPrefs.viewMode === "cards" ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {listQuery.data.items.map((inv) => (
+                <Card
+                  key={inv.id}
+                  className="cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() => navigate(`/invoices/${inv.id}`)}
+                >
+                  <CardContent className="space-y-3 pt-6">
+                    {brief ? (
+                      <>
+                        {briefSet.has("customerName") && (
+                          <p className="min-w-0 flex-1 truncate font-semibold">{inv.customerName}</p>
+                        )}
+                        {(briefSet.has("type") || briefSet.has("status")) && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {briefSet.has("type") && (
+                              <Badge variant="outline" className="shrink-0">
+                                {INVOICE_TYPE_LABELS[inv.invoiceType]}
+                              </Badge>
+                            )}
+                            {briefSet.has("status") && (
+                              <Badge variant={statusVariant(inv.status)} className="shrink-0">
+                                {INVOICE_STATUS_LABELS[inv.status]}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                        {briefSet.has("invoiceDate") && (
+                          <p className="tnum text-sm text-muted-foreground">{fmtDate(inv.invoiceDate)}</p>
+                        )}
+                        {briefSet.has("grandTotal") && (
+                          <p className="tnum text-xl font-bold text-brand-900">
+                            {fmtMoney(inv.grandTotal)}
+                          </p>
+                        )}
+                        {!briefSet.has("customerName") &&
+                          !briefSet.has("type") &&
+                          !briefSet.has("status") &&
+                          !briefSet.has("invoiceDate") &&
+                          !briefSet.has("grandTotal") && (
+                            <p className="text-sm text-muted-foreground">
+                              اختر حقلًا واحدًا على الأقل للتفاصيل المختصرة من الإعدادات.
+                            </p>
+                          )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="min-w-0 flex-1 truncate font-semibold">{inv.customerName}</p>
+                          <Badge variant="outline" className="shrink-0">
+                            {INVOICE_TYPE_LABELS[inv.invoiceType]}
+                          </Badge>
+                        </div>
+                        <p className="tnum text-sm text-muted-foreground">{fmtDate(inv.invoiceDate)}</p>
+                        <p className="tnum text-xl font-bold text-brand-900">
+                          {fmtMoney(inv.grandTotal)}
+                        </p>
+                      </>
                     )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {listQuery.data.items.map((inv) => (
-                    <TableRow
-                      key={inv.id}
-                      className="cursor-pointer hover:bg-brand-50"
-                      onClick={() => navigate(`/invoices/${inv.id}`)}
-                    >
-                      <TableCell
-                        className="tnum font-semibold text-brand-800"
-                        dir="ltr"
+                    <div className="flex items-center justify-end gap-2">
+                      <div
+                        className="flex gap-1"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        {inv.invoiceNumber}
-                      </TableCell>
-                      <TableCell>{inv.customerName}</TableCell>
-                      <TableCell>
-                        {INVOICE_TYPE_LABELS[inv.invoiceType]}
-                      </TableCell>
-                      <TableCell className="tnum">
-                        {fmtDate(inv.invoiceDate)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={statusVariant(inv.status)}>
-                          {INVOICE_STATUS_LABELS[inv.status]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="tnum text-left font-semibold">
-                        {fmtMoney(inv.grandTotal)}
-                      </TableCell>
-                      {canDelete && (
-                        <TableCell onClick={(e) => e.stopPropagation()}>
+                        {canShare && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setShareTarget(inv)}
+                            aria-label="مشاركة"
+                            title="مشاركة الفاتورة"
+                          >
+                            <Share2 className="size-4" />
+                          </Button>
+                        )}
+                        {canDelete && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -561,6 +618,97 @@ export function InvoiceListPage() {
                           >
                             <Trash2 className="size-4" />
                           </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+          <Card>
+            <CardContent className="overflow-x-auto p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {!brief && <TableHead>رقم الفاتورة</TableHead>}
+                    {(!brief || briefSet.has("customerName")) && <TableHead>العميل / المورد</TableHead>}
+                    {(!brief || briefSet.has("type")) && <TableHead>النوع</TableHead>}
+                    {(!brief || briefSet.has("invoiceDate")) && <TableHead>التاريخ</TableHead>}
+                    {(!brief || briefSet.has("status")) && <TableHead>الحالة</TableHead>}
+                    {(!brief || briefSet.has("grandTotal")) && (
+                      <TableHead className="text-left">الإجمالي</TableHead>
+                    )}
+                    {(canDelete || canShare) && (
+                      <TableHead className="w-28">إجراءات</TableHead>
+                    )}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {listQuery.data.items.map((inv) => (
+                    <TableRow
+                      key={inv.id}
+                      className="cursor-pointer hover:bg-brand-50"
+                      onClick={() => navigate(`/invoices/${inv.id}`)}
+                    >
+                      {!brief && (
+                        <TableCell
+                          className="tnum font-semibold text-brand-800"
+                          dir="ltr"
+                        >
+                          {inv.invoiceNumber}
+                        </TableCell>
+                      )}
+                      {(!brief || briefSet.has("customerName")) && <TableCell>{inv.customerName}</TableCell>}
+                      {(!brief || briefSet.has("type")) && (
+                        <TableCell>
+                          {INVOICE_TYPE_LABELS[inv.invoiceType]}
+                        </TableCell>
+                      )}
+                      {(!brief || briefSet.has("invoiceDate")) && (
+                        <TableCell className="tnum">
+                          {fmtDate(inv.invoiceDate)}
+                        </TableCell>
+                      )}
+                      {(!brief || briefSet.has("status")) && (
+                        <TableCell>
+                          <Badge variant={statusVariant(inv.status)}>
+                            {INVOICE_STATUS_LABELS[inv.status]}
+                          </Badge>
+                        </TableCell>
+                      )}
+                      {(!brief || briefSet.has("grandTotal")) && (
+                        <TableCell className="tnum text-left font-semibold">
+                          {fmtMoney(inv.grandTotal)}
+                        </TableCell>
+                      )}
+                      {(canDelete || canShare) && (
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <div className="flex gap-1">
+                            {canShare && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setShareTarget(inv)}
+                                aria-label="مشاركة"
+                                title="مشاركة الفاتورة"
+                              >
+                                <Share2 className="size-4" />
+                              </Button>
+                            )}
+                            {canDelete && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                onClick={() => setDeleteTarget(inv)}
+                                aria-label="حذف"
+                                title="حذف الفاتورة (بأي حالة)"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>
@@ -569,12 +717,17 @@ export function InvoiceListPage() {
               </Table>
             </CardContent>
           </Card>
-          <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
+          )}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
             <span className="tnum">
               صفحة {filters.page ?? 1} من {totalPages} — الإجمالي{" "}
               {listQuery.data.totalCount}
             </span>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <InvoiceViewToggle
+                value={viewPrefs.viewMode}
+                onChange={(viewMode) => setViewPrefs({ viewMode })}
+              />
               <Button
                 variant="outline"
                 size="icon"
@@ -616,6 +769,15 @@ export function InvoiceListPage() {
         busy={deleteMutation.isPending}
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
       />
+
+      {shareTarget && (
+        <ShareInvoiceDialog
+          invoiceId={shareTarget.id}
+          invoiceNumber={shareTarget.invoiceNumber}
+          open={shareTarget != null}
+          onOpenChange={(o) => !o && setShareTarget(null)}
+        />
+      )}
     </div>
   );
 }

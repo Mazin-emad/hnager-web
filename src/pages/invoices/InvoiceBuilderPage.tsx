@@ -122,7 +122,7 @@ function openPdfInNewTab(url: string | null): boolean {
 
 // ── Add-product dialog ──────────────────────────────────────────────────────
 
-function AddProductDialog({ invoiceId }: { invoiceId: string }) {
+function AddProductDialog({ invoiceId, rowVersion }: { invoiceId: string; rowVersion?: string }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [productId, setProductId] = useState("");
@@ -144,15 +144,23 @@ function AddProductDialog({ invoiceId }: { invoiceId: string }) {
     // { productId, inputValues: [{ variableKey, value }] } — omitting
     // inputValues is a type error, not a silent runtime drop.
     mutationFn: (body: AddInvoiceProductRequest) =>
-      addInvoiceProduct(invoiceId, body),
-    onSuccess: () => {
+      addInvoiceProduct(invoiceId, body, rowVersion),
+    onSuccess: (updated) => {
       toast.success("تمت إضافة المنتج");
       setOpen(false);
       setProductId("");
       setValues({});
+      queryClient.setQueryData(invoiceKeys.detail(invoiceId), updated);
       void queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(invoiceId) });
     },
-    onError: (error) => toast.error(parseApiError(error).message),
+    onError: (error) => {
+      // 409 ConcurrencyConflict / 400 InvalidConcurrencyToken: toast + reload.
+      const code = parseApiError(error).code;
+      toast.error(parseApiError(error).message);
+      if (code === "Invoice.ConcurrencyConflict" || code === "Invoice.InvalidConcurrencyToken") {
+        void queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(invoiceId) });
+      }
+    },
   });
 
   const variables = useMemo(
@@ -297,7 +305,7 @@ function EditHeaderDialog({ invoice }: { invoice: InvoiceDetailResponse }) {
         invoiceDate: values.invoiceDate,
         discountPercent: values.discountPercent,
         notes: values.notes?.trim() ? values.notes : null,
-      }),
+      }, invoice.rowVersion),
     onSuccess: (updated) => {
       const typeChanged = updated.invoiceType !== invoice.invoiceType;
       // The backend re-prices every line from current catalog pricing when
@@ -312,7 +320,14 @@ function EditHeaderDialog({ invoice }: { invoice: InvoiceDetailResponse }) {
       setOpen(false);
       void queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(invoice.id) });
     },
-    onError: (error) => toast.error(parseApiError(error).message),
+    onError: (error) => {
+      // 409 ConcurrencyConflict / 400 InvalidConcurrencyToken: toast + reload.
+      const code = parseApiError(error).code;
+      toast.error(parseApiError(error).message);
+      if (code === "Invoice.ConcurrencyConflict" || code === "Invoice.InvalidConcurrencyToken") {
+        void queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(invoice.id) });
+      }
+    },
   });
 
   return (
@@ -468,13 +483,13 @@ export function InvoiceBuilderPage() {
   const { hasPermission } = useAuth();
   const canDeleteInvoice = hasPermission("invoices:delete");
   const canShare = hasPermission("invoices:share");
-  // Received (shared-with-you) invoices render read-only: the `received=1`
-  // query flag comes from the "الفواتير المرسلة لي" list. Backend re-checks
-  // every mutation — this gating is UX only.
+  // Received (shared-with-you) invoices render the SAME editing UI as owned
+  // invoices — only delete is hidden. The `received=1` query flag comes from
+  // the "الفواتير المرسلة لي" list. Backend re-checks every mutation —
+  // this gating is UX only.
   const isReceivedView = searchParams.get("received") === "1";
   const sharedOwner = searchParams.get("owner") ?? "";
   const sharedAt = searchParams.get("sharedAt") ?? "";
-  const isReadOnly = isReceivedView;
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -491,44 +506,68 @@ export function InvoiceBuilderPage() {
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
 
+  /**
+   * Shared mutation error path: toast the Arabic message; on optimistic-
+   * concurrency codes (409 Conflict / 400 malformed token) also reload the
+   * detail so the next write uses the bumped `rowVersion`.
+   */
+  function mutationError(error: unknown) {
+    const parsed = parseApiError(error);
+    toast.error(parsed.message);
+    if (
+      parsed.code === "Invoice.ConcurrencyConflict" ||
+      parsed.code === "Invoice.InvalidConcurrencyToken"
+    ) {
+      void invalidate();
+    }
+  }
+
+  /** `rowVersion` from the latest fetched detail — sent as `If-Match`. */
+  function latestRowVersion(): string | undefined {
+    return invoiceQuery.data?.rowVersion;
+  }
+
   const excludeMutation = useMutation({
     mutationFn: ({ productId, itemId }: { productId: string; itemId: string }) =>
-      toggleInvoiceItemExcluded(id, productId, itemId),
+      toggleInvoiceItemExcluded(id, productId, itemId, latestRowVersion()),
     onSuccess: () => void invalidate(),
-    onError: (error) => toast.error(parseApiError(error).message),
+    onError: mutationError,
   });
 
   const removeMutation = useMutation({
-    mutationFn: (invoiceProductId: string) => removeInvoiceProduct(id, invoiceProductId),
+    mutationFn: (invoiceProductId: string) =>
+      removeInvoiceProduct(id, invoiceProductId, latestRowVersion()),
     onSuccess: () => {
       toast.success("تم حذف المنتج من الفاتورة");
       setRemoveTarget(null);
       void invalidate();
     },
-    onError: (error) => toast.error(parseApiError(error).message),
+    onError: mutationError,
   });
 
   const recalcMutation = useMutation({
-    mutationFn: () => recalculateInvoice(id),
-    onSuccess: () => {
+    mutationFn: () => recalculateInvoice(id, latestRowVersion()),
+    onSuccess: (updated) => {
       toast.success("تمت إعادة الحساب");
+      queryClient.setQueryData(invoiceKeys.detail(id), updated);
       void invalidate();
     },
-    onError: (error) => toast.error(parseApiError(error).message),
+    onError: mutationError,
   });
 
   const finalizeMutation = useMutation({
-    mutationFn: () => finalizeInvoice(id),
-    onSuccess: () => {
+    mutationFn: () => finalizeInvoice(id, latestRowVersion()),
+    onSuccess: (updated) => {
       toast.success("تم اعتماد الفاتورة");
       setFinalizeOpen(false);
+      queryClient.setQueryData(invoiceKeys.detail(id), updated);
       void invalidate();
     },
-    onError: (error) => toast.error(parseApiError(error).message),
+    onError: mutationError,
   });
 
   const deleteMutation = useMutation({
-    mutationFn: () => deleteInvoice(id),
+    mutationFn: () => deleteInvoice(id, latestRowVersion()),
     onSuccess: () => {
       toast.success("تم حذف الفاتورة");
       setDeleteOpen(false);
@@ -664,11 +703,15 @@ export function InvoiceBuilderPage() {
             </Badge>
             {isReceivedView && (
               <Badge variant="outline" className="text-sm">
-                مشتركة معك — عرض فقط
+                مشتركة معك
               </Badge>
             )}
-            {!isReadOnly && isDraft && <AddProductDialog invoiceId={invoice.id} />}
-            {!isReadOnly && canShare && (
+            {isDraft && (
+              <AddProductDialog invoiceId={invoice.id} rowVersion={invoice.rowVersion} />
+            )}
+            {/* Sharing is access-based, not owner-only: owner, recipient,
+                or Admin with `invoices:share`, on any status. */}
+            {canShare && (
               <Button
                 variant="outline"
                 size="sm"
@@ -702,7 +745,8 @@ export function InvoiceBuilderPage() {
               <Printer className="size-4" />
               {printBusy ? "جارٍ التجهيز…" : "طباعة"}
             </Button>
-            {!isReadOnly && canDeleteInvoice && (
+            {/* Delete is the one action hidden on received invoices. */}
+            {!isReceivedView && canDeleteInvoice && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -722,7 +766,7 @@ export function InvoiceBuilderPage() {
           <CardContent className="flex flex-wrap items-center gap-2 py-4 text-sm">
             <Badge variant="secondary">مشتركة معك</Badge>
             <span className="text-muted-foreground">
-              هذه الفاتورة مشتركة معك للعرض فقط — لا يمكن تعديلها أو اعتمادها أو حذفها أو مشاركتها.
+              هذه الفاتورة مشتركة معك — يمكنك تعديلها واعتمادها ومشاركتها كما يفعل المالك. الحذف للمالك فقط.
             </span>
             {sharedOwner && (
               <span className="tnum text-xs text-muted-foreground" dir="ltr">
@@ -742,7 +786,7 @@ export function InvoiceBuilderPage() {
       <Card className="mb-4">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg">بيانات الفاتورة</CardTitle>
-          {!isReadOnly && isDraft && <EditHeaderDialog invoice={invoice} />}
+          {isDraft && <EditHeaderDialog invoice={invoice} />}
         </CardHeader>
         <CardContent>
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -768,7 +812,7 @@ export function InvoiceBuilderPage() {
               <p className="tnum text-xl font-bold text-brand-950">{fmtMoney(invoice.grandTotal)}</p>
             </div>
           </div>
-          {!isReadOnly && isDraft && (
+          {isDraft && (
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 variant="outline"
@@ -801,7 +845,7 @@ export function InvoiceBuilderPage() {
       {invoice.products.length === 0 ? (
         <EmptyState
           title="لا توجد منتجات بعد"
-          hint={isReadOnly ? "هذه الفاتورة بلا بنود" : isDraft ? "أضف أول منتج مع قيم المتغيرات ليتم حساب الأصناف تلقائيًا" : "هذه الفاتورة بلا بنود"}
+          hint={isDraft ? "أضف أول منتج مع قيم المتغيرات ليتم حساب الأصناف تلقائيًا" : "هذه الفاتورة بلا بنود"}
           icon={<Receipt className="size-6" />}
         />
       ) : (
@@ -824,7 +868,7 @@ export function InvoiceBuilderPage() {
                       عدد العنابر: {fmtNum(block.barnsCount)}
                     </Badge>
                   </div>
-                  {!isReadOnly && isDraft && (
+                  {isDraft && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -855,7 +899,7 @@ export function InvoiceBuilderPage() {
                           <TableHead className="text-left">اجمالي العدد</TableHead>
                           <TableHead className="text-left" title="السعر المحسوم لنوع هذه الفاتورة: سعر البيع للمبيعات، وسعر الشراء للمشتريات">السعر</TableHead>
                           <TableHead className="text-left">السعر الإجمالي</TableHead>
-                          {!isReadOnly && isDraft && <TableHead className="w-24">الحالة</TableHead>}
+                          {isDraft && <TableHead className="w-24">الحالة</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -887,7 +931,7 @@ export function InvoiceBuilderPage() {
                               <TableCell className="tnum text-left font-semibold">
                                 {fmtMoney(item.totalPriceSnapshot)}
                               </TableCell>
-                              {!isReadOnly && isDraft && (
+                              {isDraft && (
                                 <TableCell>                                  <Button
                                     variant="ghost"
                                     size="sm"
@@ -950,17 +994,19 @@ export function InvoiceBuilderPage() {
         busy={removeMutation.isPending}
         onConfirm={() => removeTarget && removeMutation.mutate(removeTarget)}
       />
-      <ConfirmAction
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title="حذف الفاتورة؟"
-        description="سيُحذف الفاتورة نهائيًا بجميع بنودها (حذف نهائي) — الحذف متاح بأي حالة بما فيها المعتمدة."
-        confirmLabel="حذف"
-        danger
-        busy={deleteMutation.isPending}
-        onConfirm={() => deleteMutation.mutate()}
-      />
-      {!isReadOnly && (
+      {!isReceivedView && (
+        <ConfirmAction
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title="حذف الفاتورة؟"
+          description="سيُحذف الفاتورة نهائيًا بجميع بنودها (حذف نهائي) — الحذف متاح بأي حالة بما فيها المعتمدة."
+          confirmLabel="حذف"
+          danger
+          busy={deleteMutation.isPending}
+          onConfirm={() => deleteMutation.mutate()}
+        />
+      )}
+      {canShare && (
         <ShareInvoiceDialog
           invoiceId={invoice.id}
           invoiceNumber={invoice.invoiceNumber}

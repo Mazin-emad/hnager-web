@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { LayoutGrid, List } from "lucide-react";
 import { toast } from "sonner";
 import { changePassword, getProfile, updateProfile } from "@/api/account";
 import { authKeys } from "@/api/auth";
@@ -21,6 +22,12 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  BRIEF_FIELD_LABELS,
+  BRIEF_FIELD_ORDER,
+  useInvoiceViewPrefs,
+  type BriefFieldKey,
+} from "@/lib/invoiceViewPrefs";
 import { queryClient } from "@/lib/queryClient";
 
 const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -48,6 +55,18 @@ const passwordSchema = z
 export function AccountPage() {
   const { user } = useAuth();
   const [profileBusy, setProfileBusy] = useState(false);
+  // Display-only preference, stored client-side (localStorage) — the backend
+  // never sees it. Shared with the invoices list via the same hook.
+  const [viewPrefs, setViewPrefs] = useInvoiceViewPrefs();
+
+  function toggleBriefField(field: BriefFieldKey) {
+    const has = viewPrefs.briefFields.includes(field);
+    setViewPrefs({
+      briefFields: has
+        ? viewPrefs.briefFields.filter((f) => f !== field)
+        : [...viewPrefs.briefFields, field],
+    });
+  }
 
   const profileForm = useForm<z.infer<typeof profileSchema>>({
     resolver: zodResolver(profileSchema),
@@ -220,6 +239,71 @@ export function AccountPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle className="text-lg">تفضيلات العرض</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            تفضيلات العرض محفوظة على هذا الجهاز فقط — لا تُرسل إلى الخادم.
+          </p>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">طريقة عرض الفواتير</p>
+            <div className="flex gap-1 rounded-xl border border-border bg-card p-1 sm:w-fit">
+              <Button
+                variant={viewPrefs.viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewPrefs({ viewMode: "table" })}
+              >
+                <List className="size-4" />
+                جدول
+              </Button>
+              <Button
+                variant={viewPrefs.viewMode === "cards" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewPrefs({ viewMode: "cards" })}
+              >
+                <LayoutGrid className="size-4" />
+                بطاقات
+              </Button>
+            </div>
+          </div>
+          <label className="flex cursor-pointer items-center gap-1.5 text-sm">
+            <input
+              type="checkbox"
+              checked={viewPrefs.briefDetails}
+              onChange={(e) => setViewPrefs({ briefDetails: e.target.checked })}
+              className="size-4 accent-brand-800"
+            />
+            تفعيل التفاصيل المختصرة في قوائم الفواتير
+          </label>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">حقول التفاصيل المختصرة</p>
+            <p className="text-xs text-muted-foreground">
+              تُطبق على قائمة فواتيرك وقائمة الفواتير المرسلة لك — في الجدول والبطاقات.
+              رقم الفاتورة لا يظهر في الوضع المختصر أبدًا. تاريخ الاستلام والمالك يخصّان
+              الفواتير المرسلة لك فقط.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {BRIEF_FIELD_ORDER.map((field) => (
+                <label
+                  key={field}
+                  className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    checked={viewPrefs.briefFields.includes(field)}
+                    onChange={() => toggleBriefField(field)}
+                    className="size-4 accent-brand-800"
+                  />
+                  {BRIEF_FIELD_LABELS[field]}
+                </label>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -21,6 +21,14 @@ export const invoiceKeys = {
     ["invoices", "received", filters] as const,
 };
 
+/**
+ * Builds the optimistic-concurrency header from the last fetched `rowVersion`.
+ * Omitted when absent (backward compatible — the server skips the check).
+ */
+function ifMatchHeaders(rowVersion?: string): Record<string, string> {
+  return rowVersion ? { "If-Match": rowVersion } : {};
+}
+
 function toParams(filters: InvoiceFilters): Record<string, string | number> {
   const params: Record<string, string | number> = {};
   if (filters.customerName?.trim()) params.CustomerName = filters.customerName.trim();
@@ -51,40 +59,69 @@ export async function createInvoice(body: CreateInvoiceRequest): Promise<Invoice
 export async function updateInvoiceHeader(
   id: string,
   body: UpdateInvoiceHeaderRequest,
+  rowVersion?: string,
 ): Promise<InvoiceDetailResponse> {
-  const res = await api.put<InvoiceDetailResponse>(`/api/v1/invoices/${id}`, body);
+  const res = await api.put<InvoiceDetailResponse>(`/api/v1/invoices/${id}`, body, {
+    headers: ifMatchHeaders(rowVersion),
+  });
   return res.data;
 }
 
 export async function addInvoiceProduct(
   id: string,
   body: AddInvoiceProductRequest,
+  rowVersion?: string,
 ): Promise<InvoiceDetailResponse> {
-  const res = await api.post<InvoiceDetailResponse>(`/api/v1/invoices/${id}/products`, body);
+  const res = await api.post<InvoiceDetailResponse>(`/api/v1/invoices/${id}/products`, body, {
+    headers: ifMatchHeaders(rowVersion),
+  });
   return res.data;
 }
 
-export async function removeInvoiceProduct(id: string, invoiceProductId: string): Promise<void> {
-  await api.delete(`/api/v1/invoices/${id}/products/${invoiceProductId}`);
+export async function removeInvoiceProduct(
+  id: string,
+  invoiceProductId: string,
+  rowVersion?: string,
+): Promise<void> {
+  await api.delete(`/api/v1/invoices/${id}/products/${invoiceProductId}`, {
+    headers: ifMatchHeaders(rowVersion),
+  });
 }
 
 export async function toggleInvoiceItemExcluded(
   id: string,
   invoiceProductId: string,
   invoiceItemId: string,
+  rowVersion?: string,
 ): Promise<void> {
   await api.patch(
     `/api/v1/invoices/${id}/products/${invoiceProductId}/items/${invoiceItemId}/exclude`,
+    undefined,
+    { headers: ifMatchHeaders(rowVersion) },
   );
 }
 
-export async function recalculateInvoice(id: string): Promise<InvoiceDetailResponse> {
-  const res = await api.post<InvoiceDetailResponse>(`/api/v1/invoices/${id}/recalculate`);
+export async function recalculateInvoice(
+  id: string,
+  rowVersion?: string,
+): Promise<InvoiceDetailResponse> {
+  const res = await api.post<InvoiceDetailResponse>(
+    `/api/v1/invoices/${id}/recalculate`,
+    undefined,
+    { headers: ifMatchHeaders(rowVersion) },
+  );
   return res.data;
 }
 
-export async function finalizeInvoice(id: string): Promise<InvoiceDetailResponse> {
-  const res = await api.post<InvoiceDetailResponse>(`/api/v1/invoices/${id}/finalize`);
+export async function finalizeInvoice(
+  id: string,
+  rowVersion?: string,
+): Promise<InvoiceDetailResponse> {
+  const res = await api.post<InvoiceDetailResponse>(
+    `/api/v1/invoices/${id}/finalize`,
+    undefined,
+    { headers: ifMatchHeaders(rowVersion) },
+  );
   return res.data;
 }
 
@@ -94,8 +131,8 @@ export async function finalizeInvoice(id: string): Promise<InvoiceDetailResponse
  * a Member deleting someone else's invoice fails with `403 Invoice.AccessDenied`.
  * Returns 204 with an empty body; a second delete returns 404.
  */
-export async function deleteInvoice(id: string): Promise<void> {
-  await api.delete(`/api/v1/invoices/${id}`);
+export async function deleteInvoice(id: string, rowVersion?: string): Promise<void> {
+  await api.delete(`/api/v1/invoices/${id}`, { headers: ifMatchHeaders(rowVersion) });
 }
 
 /** Shared PDF fetch (blob) — used by both download and print so the API call isn't duplicated. */
@@ -137,7 +174,7 @@ export async function getInvoicePdf(id: string, mode: InvoicePdfMode = "Full"): 
 
 // ── Sharing ─────────────────────────────────────────────────────────────────
 
-/** Share an invoice with another user. Owner (or Admin) only, any status. */
+/** Share an invoice. Anyone with access (owner, recipient, Admin) + `invoices:share`, any status. */
 export async function shareInvoice(
   id: string,
   body: ShareInvoiceRequest,
@@ -146,7 +183,7 @@ export async function shareInvoice(
   return res.data;
 }
 
-/** Revoke a share. Owner (or Admin) only. 204 empty body. */
+/** Revoke a share: owner/Admin (any grant), the granting user, or the recipient. 204 empty body. */
 export async function unshareInvoice(id: string, sharedWithUserId: string): Promise<void> {
   await api.delete(`/api/v1/invoices/${id}/share/${encodeURIComponent(sharedWithUserId)}`);
 }

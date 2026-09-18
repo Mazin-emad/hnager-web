@@ -83,6 +83,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   "invoices:delete": "حذف الفواتير",
   "invoices:share": "مشاركة الفواتير",
   "invoices:received-read": "عرض الفواتير المرسلة لي",
+  "users:directory-read": "عرض دليل الأعضاء",
 };
 
 export const KNOWN_PERMISSIONS = Object.keys(PERMISSION_LABELS);

@@ -108,17 +108,22 @@ interface InvoiceShareResponse {
   sharedWithUserId: string; sharedByUserId: string; sharedAt: string; // ISO
 }
 ```
-Rules enforced server-side: only the **owner** (or Admin) can share; no self-share;
-recipient must exist and not be disabled; duplicates rejected; ownership never transfers;
+Rules enforced server-side: anyone **with access** (owner, Admin, or an active share
+recipient) plus the `invoices:share` permission can share — sharing is NOT owner-only
+(chains like A → B → C are supported; `sharedByUserId` records the actual sharer).
+Ownership never transfers. No self-share; no sharing with the owner (they already have
+access); recipient must exist and not be disabled; an **active** grant to the same
+recipient is a duplicate (409) while re-sharing after revocation creates a new grant;
 email notification is fire-and-forget (no email data in any API response).
 
 | Status | `errors[0]` code | Meaning |
 |---|---|---|
-| 403 | `Invoice.ShareNotAllowed` | not the owner (or ID manipulation) |
+| 403 | `Invoice.ShareNotAllowed` | no access to the invoice (or ID manipulation) |
 | 400 | `Invoice.ShareWithSelf` | sharing with yourself |
+| 400 | `Invoice.ShareWithOwner` | sharing with the invoice owner |
 | 404 | `Invoice.NotFound` / `Invoice.RecipientNotFound` | invoice / recipient missing |
 | 422 | `Invoice.RecipientInactive` | recipient disabled |
-| 409 | `Invoice.DuplicateShare` | already shared with this user — treat as success-ish info, refresh UI |
+| 409 | `Invoice.DuplicateShare` | recipient already holds an active grant — treat as info, refresh UI |
 
 ### 3.2 Received invoices (new member section "الفواتير المرسلة لي")
 ```
@@ -150,21 +155,36 @@ interface ReceivedInvoiceResponse {
 DELETE /api/v1/invoices/{id}/share/{sharedWithUserId}   Permission: invoices:share
 → 204 | 404 Invoice.ShareNotFound | 403 Invoice.ShareNotAllowed
 ```
+Revocation rights: owner/Admin (any grant), the user who created the grant, or the
+recipient themselves (leaving). Revocation **deactivates** (history preserved) and
+**cascades**: revoking B also ends access for everyone downstream (C granted by B,
+D granted by C, …). Re-sharing afterward creates a new grant row.
 
 ### 3.4 Access matrix (must be mirrored in UI gating; backend always re-checks)
 | Action | Owner | Share recipient | Other member | Admin |
 |---|---|---|---|---|
 | Read detail / print PDF | ✅ | ✅ | ❌ 403/404 | ✅ |
-| Edit / add-remove products / recalc / finalize / delete / share / unshare | ✅ | ❌ 403 | ❌ | ✅ (per permission) |
+| Edit / add-remove products / recalc / finalize / share | ✅ | ✅ (same invoice, same Draft/finalized rules) | ❌ | ✅ (per permission) |
+| Delete | ✅ | ❌ 403 — edit ≠ delete | ❌ | ✅ |
+| Unshare | ✅ any grant | ✅ own grants / leave | ❌ | ✅ any grant |
 | `GET /received` | own receipts | own receipts | own receipts | own receipts |
 
-### 3.5 ⚠️ Known gap — recipient picker
-There is **no new member-search endpoint**. The existing `GET /api/Users` (and
-`GET /api/Users/{id}` → `UserResponse { id, firstName, lastName, email, isDisabled, roles }`)
-requires `users:read`, which the **Member** role does **not** have (Admin only). Options:
-(a) Admin-only picker via `GET /api/Users`; (b) member shares by pasting a user id;
-(c) request a backend member-lookup endpoint. Do **not** work around this by exposing the
-admin users endpoint to members client-side.
+Recipients edit the SAME invoice (no copies); the owner sees their changes live.
+`updatedBy` stamps the actual editor. Draft-only rules (incl. Finalized protection)
+apply equally to recipients.
+
+### 3.5 Recipient picker — member directory endpoint
+```
+GET /api/Users/directory        Permission: users:directory-read (Member + Admin)
+→ 200 MemberDirectoryResponse[]
+```
+Privacy-safe listing for the share picker: active (non-disabled) users only, minimal fields.
+The full admin listing `GET /api/Users` (with emails/roles/status) still requires `users:read`.
+```ts
+interface MemberDirectoryResponse { id: string; firstName: string; lastName: string; userName: string; }
+```
+Use this to populate the share-recipient picker. Do **not** expose the admin users endpoint
+to members client-side.
 
 ---
 
@@ -194,7 +214,7 @@ Permission: invoices:pdf.  → application/pdf bytes. Invalid mode → 400 Invoi
 | Variable `key` validation | **modified**: `"BarnsCount"` reserved (like `"LinesCount"`) |
 | `GET .../pdf` | **modified**: new optional `mode` query param |
 | NEW types | `InvoicePdfMode`, `ReceivedInvoicePeriod`, `UpsertProductBarnsCountFormulaRequest`, `ProductBarnsCountFormulaResponse`, `ShareInvoiceRequest`, `InvoiceShareResponse`, `ReceivedInvoicesFilterRequest`, `ReceivedInvoiceListResponse`, `ReceivedInvoiceResponse` |
-| NEW permissions | `invoices:share`, `invoices:received-read` (Member role includes both; Admin has all) |
+| NEW permissions | `invoices:share`, `invoices:received-read`, `users:directory-read` (Member role includes all three; Admin has all) |
 | Removed / renamed | **NONE** — all existing fields, routes, and behaviors are intact |
 
 ---
@@ -225,7 +245,15 @@ interface InvoiceProductResponse {
   barnsCount: number; barnsCountFormulaSnapshot: string; barnsCountFormulaVersion: number;  // NEW
   inputValues: InvoiceInputValueResponse[]; items: InvoiceItemResponse[];
 }
-// InvoiceDetailResponse, InvoiceSummaryResponse, InvoiceListResponse,
+interface InvoiceDetailResponse {
+  id: string; invoiceNumber: string; customerName: string; invoiceType: InvoiceType;
+  salesRepName: string; day: string | null; invoiceDate: string; status: InvoiceStatus;
+  notes: string | null; subtotal: number; discountPercent: number; discountAmount: number;
+  grandTotal: number; createdAt: string; finalizedAt: string | null;
+  rowVersion: string; // base64 — send back as If-Match (§8). NEW
+  products: InvoiceProductResponse[];
+}
+// InvoiceSummaryResponse, InvoiceListResponse,
 // InvoiceItemResponse, CreateItemRequest, UpdateItemRequest: shapes UNCHANGED
 // (InvoiceItemResponse.quantityMultiplierTypeSnapshot now admits 'BarnsCount').
 // Share/received interfaces: see §3.1–§3.2 verbatim.
@@ -241,9 +269,9 @@ interface ApiProblem { type: string; title: string; status: number; errors: [str
   GET/PUT `barns-count-formula` endpoints (same UX as quantity/lines-count, incl. version display).
 - Item form: add `BarnsCount` (label عدد العنابر) to the multiplier dropdown.
 - Variable form: reject key `BarnsCount` client-side (server also rejects).
-- New **Share dialog** on invoice detail (owner only, Draft or any status — share works
-  regardless of status): recipient user-id input (+ admin member picker per §3.5), shows
-  409-duplicate as info, never offers sharing on received (non-owned) invoices.
+- **Share dialog** on invoice detail for anyone with access (owner, recipient, admin;
+  Draft or any status): recipient picker from `GET /api/Users/directory`, shows
+  409-duplicate as info. Unshare action for owners/sharers (cascade is server-side).
 
 **API services** (`invoicesApi`, `productsApi`)
 - `getBarnsCountFormula(productId)`, `setBarnsCountFormula(productId, { expression })`.
@@ -262,27 +290,54 @@ interface ApiProblem { type: string; title: string; status: number; errors: [str
 - New nav/section **الفواتير المرسلة لي** (received list, server-paginated) with filters:
   preset chips (last 24h / 7 days / 30 days), custom date range, sender filter; columns:
   invoice number, owner/sender, invoice date, **sharedAt**, status, grand total.
-- Invoice detail: show عدد العنابر per product; on received invoices render **read-only**
-  (hide edit/recalc/finalize/delete/share buttons; show "shared with you" badge + owner).
+- Invoice detail: show عدد العنابر per product; on received invoices allow the SAME
+  editing UI as owned invoices (hide only delete; show "shared with you" badge + owner).
+  Always send `If-Match` (see §8) and handle **409** by reloading + showing the conflict message.
 - PDF buttons: two options — full invoice vs. without items.
 - Error toasts keyed by `errors[0]`: `Invoice.DuplicateShare` (409), `Invoice.ShareNotAllowed`
   (403), `Invoice.RecipientNotFound` (404), `Invoice.RecipientInactive` (422),
   `Invoice.InvalidPdfMode` (400).
 
 **State/auth**
-- Gate share UI on ownership (`createdBy === currentUserId` or admin) **and** the
+- Gate share UI on invoice access (owner, admin, or received) **and** the
   `invoices:share` permission; gate received section on `invoices:received-read`.
   Backend is authoritative — UI gating is UX only.
 
-## 8. Final checklist
+## 8. Optimistic concurrency (If-Match / ETag / RowVersion)
+
+Multiple users (owner + recipients) can edit the same invoice, so every mutating
+invoice endpoint accepts an `If-Match` header carrying the `rowVersion` from the last
+fetched detail (also returned as the `ETag` response header on `GET {id}`, quoted):
+
+```
+GET /api/v1/invoices/{id} → { ..., rowVersion: "<base64>" } + ETag: "<base64>"
+PUT /api/v1/invoices/{id}            + If-Match: <base64>
+POST /{id}/products, DELETE .../products/{pid}, PATCH .../exclude,
+POST /{id}/recalculate, POST /{id}/finalize, DELETE /{id}   + If-Match: <base64>
+```
+
+- Omit the header → no check (backward compatible). Send it → stale value returns
+  **409** with `errors[0] = "Invoice.ConcurrencyConflict"` ("reload and retry").
+  Malformed base64 → **400** `"Invoice.InvalidConcurrencyToken"`.
+- Every successful mutation bumps the version — always use the `rowVersion` from the
+  latest response before the next write.
+- `InvoiceDetailResponse` gains `rowVersion: string` (base64, TS type below).
+- Granularity is per-invoice: two users editing different products can still conflict
+  (409) — surface it as "someone else saved changes, reloading".
+
+## 9. Final checklist
 - [ ] Multiplier dropdowns accept/send `"BarnsCount"`; invoice/product views render it.
 - [ ] Product admin UI has quantity + lines-count + **barns-count** formula sections.
 - [ ] Variable editor blocks `BarnsCount` key; item formula hints mention `BarnsCount`.
 - [ ] Invoice detail renders `barnsCount` (عدد العنابر); no formula snapshots displayed.
-- [ ] Share dialog → `POST share`; 409/403/404/422 handled; ownership never assumed transferred.
+- [ ] Share dialog → `POST share` for anyone with access; 409/403/404/422/400 handled;
+      ownership never assumed transferred; chained shares (A→B→C) supported.
 - [ ] "الفواتير المرسلة لي" page: server pagination + `period`/`fromDate`/`toDate`/`fromUserId`
-      filters on `sharedAt`; read-only detail; PDF printable by recipient.
-- [ ] Unshare action for owners; revoked recipients lose access (backend-enforced).
+      filters on `sharedAt`; received detail is editable (same UI, hide delete only);
+      PDF printable by recipient.
+- [ ] Unshare for owners/sharers; cascade verified (revoking B cuts off B→C→D); re-share works.
+- [ ] `If-Match` sent on all invoice mutations from latest `rowVersion`; 409 handled with
+      reload; malformed-token 400 handled. `InvoiceDetailResponse.rowVersion` typed.
 - [ ] PDF download supports `mode=Full|WithoutItems` with correct filenames.
 - [ ] No client-side quantity/price math introduced; snapshot fields rendered as-is.
-- [ ] Recipient picker gap (§3.5) resolved by product decision or backend follow-up.
+- [ ] Share-recipient picker populated from `GET /api/Users/directory` (§3.5).
