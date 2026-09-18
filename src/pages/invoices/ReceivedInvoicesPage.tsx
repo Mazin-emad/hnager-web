@@ -7,6 +7,7 @@ import { parseApiError } from "@/api/errors";
 import type { ReceivedInvoicePeriod, ReceivedInvoicesFilterRequest } from "@/api/types";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, RECEIVED_PERIOD_LABELS } from "@/lib/labels";
 import { fmtDate, fmtDateTime, fmtMoney } from "@/lib/format";
+import { displayUserName, useUserNameMap } from "@/lib/userNames";
 import { useInvoiceViewPrefs } from "@/lib/invoiceViewPrefs";
 import { InvoiceViewToggle } from "@/components/invoices/InvoiceViewToggle";
 import { EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
@@ -40,6 +41,7 @@ export function ReceivedInvoicesPage() {
     pageSize: PAGE_SIZE,
   });
   const [viewPrefs, setViewPrefs] = useInvoiceViewPrefs();
+  const userNames = useUserNameMap();
   const brief = viewPrefs.briefDetails;
   // Same user-chosen brief field set as the owner's list; only the columns
   // this screen actually has (incl. owner/sharedAt) can render.
@@ -192,7 +194,7 @@ export function ReceivedInvoicesPage() {
                   className="cursor-pointer transition-shadow hover:shadow-md"
                   onClick={() =>
                     navigate(
-                      `/invoices/${inv.invoiceId}?received=1&owner=${encodeURIComponent(inv.ownerUserId)}&sharedAt=${encodeURIComponent(inv.sharedAt)}`,
+                      `/invoices/${inv.invoiceId}?received=1&owner=${encodeURIComponent(inv.ownerUserId)}&by=${encodeURIComponent(inv.sharedByUserId)}&sharedAt=${encodeURIComponent(inv.sharedAt)}`,
                     )
                   }
                 >
@@ -230,8 +232,8 @@ export function ReceivedInvoicesPage() {
                           </p>
                         )}
                         {briefSet.has("owner") && (
-                          <p className="tnum truncate text-xs text-muted-foreground" dir="ltr" title={inv.ownerUserId}>
-                            {inv.ownerUserId}
+                          <p className="truncate text-xs text-muted-foreground" title={inv.ownerUserId}>
+                            المالك: {displayUserName(userNames, inv.ownerUserId)}
                           </p>
                         )}
                         {briefSet.has("grandTotal") && (
@@ -265,8 +267,8 @@ export function ReceivedInvoicesPage() {
                         <p className="tnum text-sm text-muted-foreground">
                           الاستلام: {fmtDateTime(inv.sharedAt)}
                         </p>
-                        <p className="tnum truncate text-xs text-muted-foreground" dir="ltr" title={inv.ownerUserId}>
-                          {inv.ownerUserId}
+                        <p className="truncate text-xs text-muted-foreground" title={inv.ownerUserId}>
+                          المالك: {displayUserName(userNames, inv.ownerUserId)}
                         </p>
                         <div className="flex items-center justify-between gap-2">
                           <p className="tnum text-xl font-bold text-brand-900">
@@ -293,7 +295,7 @@ export function ReceivedInvoicesPage() {
                     {(!brief || briefSet.has("type")) && <TableHead>النوع</TableHead>}
                     {(!brief || briefSet.has("invoiceDate")) && <TableHead>تاريخ الفاتورة</TableHead>}
                     {(!brief || briefSet.has("sharedAt")) && <TableHead>تاريخ الاستلام</TableHead>}
-                    {(!brief || briefSet.has("owner")) && <TableHead>المالك / المرسِل</TableHead>}
+                    {(!brief || briefSet.has("owner")) && <TableHead>المالك</TableHead>}
                     {(!brief || briefSet.has("status")) && <TableHead>الحالة</TableHead>}
                     {(!brief || briefSet.has("grandTotal")) && (
                       <TableHead className="text-left">الإجمالي</TableHead>
@@ -307,7 +309,7 @@ export function ReceivedInvoicesPage() {
                       className="cursor-pointer hover:bg-brand-50"
                       onClick={() =>
                         navigate(
-                          `/invoices/${inv.invoiceId}?received=1&owner=${encodeURIComponent(inv.ownerUserId)}&sharedAt=${encodeURIComponent(inv.sharedAt)}`,
+                          `/invoices/${inv.invoiceId}?received=1&owner=${encodeURIComponent(inv.ownerUserId)}&by=${encodeURIComponent(inv.sharedByUserId)}&sharedAt=${encodeURIComponent(inv.sharedAt)}`,
                         )
                       }
                     >
@@ -327,8 +329,8 @@ export function ReceivedInvoicesPage() {
                         <TableCell className="tnum">{fmtDateTime(inv.sharedAt)}</TableCell>
                       )}
                       {(!brief || briefSet.has("owner")) && (
-                        <TableCell className="tnum max-w-40 truncate text-xs" dir="ltr" title={inv.ownerUserId}>
-                          {inv.ownerUserId}
+                        <TableCell className="max-w-40 truncate" title={inv.ownerUserId}>
+                          {displayUserName(userNames, inv.ownerUserId)}
                         </TableCell>
                       )}
                       {(!brief || briefSet.has("status")) && (

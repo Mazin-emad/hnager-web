@@ -44,6 +44,7 @@ import type {
 import { ShareInvoiceDialog } from "@/components/invoices/ShareInvoiceDialog";
 import { useAuth } from "@/auth/AuthContext";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS, counterpartyLabel, counterpartyNameLabel } from "@/lib/labels";
+import { displayUserName, useUserNameMap } from "@/lib/userNames";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum } from "@/lib/format";
 import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
@@ -489,7 +490,9 @@ export function InvoiceBuilderPage() {
   // this gating is UX only.
   const isReceivedView = searchParams.get("received") === "1";
   const sharedOwner = searchParams.get("owner") ?? "";
+  const sharedBy = searchParams.get("by") ?? "";
   const sharedAt = searchParams.get("sharedAt") ?? "";
+  const userNames = useUserNameMap();
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -769,8 +772,13 @@ export function InvoiceBuilderPage() {
               هذه الفاتورة مشتركة معك — يمكنك تعديلها واعتمادها ومشاركتها كما يفعل المالك. الحذف للمالك فقط.
             </span>
             {sharedOwner && (
-              <span className="tnum text-xs text-muted-foreground" dir="ltr">
-                owner: {sharedOwner}
+              <span className="text-xs text-muted-foreground" title={sharedOwner}>
+                المالك: {displayUserName(userNames, sharedOwner)}
+              </span>
+            )}
+            {sharedBy && sharedBy !== sharedOwner && (
+              <span className="text-xs text-muted-foreground" title={sharedBy}>
+                مشاركة من: {displayUserName(userNames, sharedBy)}
               </span>
             )}
             {sharedAt && (
