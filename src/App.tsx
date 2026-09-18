@@ -16,6 +16,9 @@ const InvoiceListPage = lazy(() =>
 const InvoiceBuilderPage = lazy(() =>
   import("@/pages/invoices/InvoiceBuilderPage").then((m) => ({ default: m.InvoiceBuilderPage })),
 );
+const ReceivedInvoicesPage = lazy(() =>
+  import("@/pages/invoices/ReceivedInvoicesPage").then((m) => ({ default: m.ReceivedInvoicesPage })),
+);
 const ProductsPage = lazy(() =>
   import("@/pages/catalog/ProductsPage").then((m) => ({ default: m.ProductsPage })),
 );
@@ -68,6 +71,14 @@ export function App() {
         >
           <Route index element={<Navigate to="/invoices" replace />} />
           <Route path="/invoices" element={<InvoiceListPage />} />
+          <Route
+            path="/invoices/received"
+            element={
+              <RequirePermission permission="invoices:received-read" fallback={<AccessDenied />}>
+                <ReceivedInvoicesPage />
+              </RequirePermission>
+            }
+          />
           <Route path="/invoices/:id" element={<InvoiceBuilderPage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/products/:id" element={<ProductDetailPage />} />

@@ -32,6 +32,7 @@ import { parseApiError } from "@/api/errors";
 import type { AssignedProductVariable, ItemDetailResponse } from "@/api/types";
 import { useAuth } from "@/auth/AuthContext";
 import { FormulaEditor } from "@/components/formula/FormulaEditor";
+import { BarnsCountFormulaEditor } from "@/components/formula/BarnsCountFormulaEditor";
 import { LinesCountFormulaEditor } from "@/components/formula/LinesCountFormulaEditor";
 import { QuantityFormulaEditor } from "@/components/formula/QuantityFormulaEditor";
 import {
@@ -76,13 +77,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fmtMoney } from "@/lib/format";
+import { QUANTITY_MULTIPLIER_LABELS } from "@/lib/labels";
 
 const itemSchema = z.object({
   name: z.string().min(1, "الاسم مطلوب").max(200),
   code: z.string().max(100).optional().or(z.literal("")),
   salesPrice: z.coerce.number().min(0, "سعر البيع لا يكون سالبًا"),
   purchasePrice: z.coerce.number().min(0, "سعر الشراء لا يكون سالبًا"),
-  quantityMultiplier: z.enum(["ProductQuantity", "LinesCount"], {
+  quantityMultiplier: z.enum(["ProductQuantity", "LinesCount", "BarnsCount"], {
     message: "اختر مضاعف الكمية",
   }),
   displayOrder: z.coerce.number().min(0, "لا يقل عن 0"),
@@ -271,6 +273,7 @@ function ItemDialog({
                     <SelectContent>
                       <SelectItem value="ProductQuantity">كمية المنتج (Product quantity)</SelectItem>
                       <SelectItem value="LinesCount">عدد الخطوط (Lines count)</SelectItem>
+                      <SelectItem value="BarnsCount">عدد العنابر (Barns count)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -699,6 +702,28 @@ export function ProductDetailPage() {
         </CardContent>
       </Card>
 
+      {/* Barns-count formula (backend-calculated barns count / عدد العنابر) */}
+      <Card className="mb-4">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-lg">معادلة عدد العنابر</CardTitle>
+          {product.barnsCountFormulaVersion > 0 && (
+            <Badge variant="secondary" className="tnum" dir="ltr">
+              v{product.barnsCountFormulaVersion}
+            </Badge>
+          )}
+        </CardHeader>
+        <CardContent>
+          <BarnsCountFormulaEditor
+            productId={id}
+            variables={[...product.variables].sort(
+              (a, b) => a.displayOrder - b.displayOrder,
+            )}
+            activeVariableIds={activeVariableIds}
+            readOnly={!isAdmin}
+          />
+        </CardContent>
+      </Card>
+
       {/* Items */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -781,7 +806,7 @@ export function ProductDetailPage() {
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="whitespace-nowrap">
-                          {item.quantityMultiplier === "LinesCount" ? "عدد الخطوط" : "كمية المنتج"}
+                          {QUANTITY_MULTIPLIER_LABELS[item.quantityMultiplier] ?? item.quantityMultiplier}
                         </Badge>
                       </TableCell>
                       <TableCell>

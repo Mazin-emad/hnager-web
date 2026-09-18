@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   FileText,
+  Inbox,
   LogOut,
   Menu,
   Package,
@@ -34,7 +35,8 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { to: "/invoices", label: "الفواتير", icon: <FileText className="size-5" /> },
+  { to: "/invoices", label: "الفواتير", icon: <FileText className="size-5" />, end: true },
+  { to: "/invoices/received", label: "الفواتير المرسلة لي", icon: <Inbox className="size-5" />, permission: "invoices:received-read" },
   { to: "/products", label: "المنتجات", icon: <Package className="size-5" /> },
   { to: "/variables", label: "المتغيرات", icon: <SlidersHorizontal className="size-5" /> },
   { to: "/users", label: "المستخدمون", icon: <Users className="size-5" />, permission: "users:read" },

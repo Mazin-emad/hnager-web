@@ -15,7 +15,7 @@ import {
   variableKeys,
 } from "@/api/variables";
 import { parseApiError, getServerErrorDetail } from "@/api/errors";
-import { LINES_COUNT_KEY, type VariableResponse } from "@/api/types";
+import { BARNS_COUNT_KEY, LINES_COUNT_KEY, type VariableResponse } from "@/api/types";
 import { useAuth } from "@/auth/AuthContext";
 import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
@@ -55,9 +55,9 @@ const variableSchema = z.object({
     .min(1, "المفتاح مطلوب")
     .max(100)
     .regex(KEY_PATTERN, "حروف إنجليزية وأرقام و_ فقط، ويبدأ بحرف")
-    // Reserved server-side for the invoice lines-count value (400 Variable.ReservedKey).
-    .refine((k) => k.trim() !== LINES_COUNT_KEY, {
-      message: `المفتاح ${LINES_COUNT_KEY} محجوز للنظام ولا يمكن استخدامه`,
+    // Reserved server-side for the invoice lines-count / barns-count values (400 Variable.ReservedKey).
+    .refine((k) => k.trim() !== LINES_COUNT_KEY && k.trim() !== BARNS_COUNT_KEY, {
+      message: `المفتاحان ${LINES_COUNT_KEY} و${BARNS_COUNT_KEY} محجوزان للنظام ولا يمكن استخدامهما`,
     }),
   unit: z.string().max(100).optional().or(z.literal("")),
   description: z.string().max(500).optional().or(z.literal("")),

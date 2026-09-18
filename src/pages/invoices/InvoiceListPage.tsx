@@ -83,7 +83,7 @@ const PAGE_SIZE = 20;
 
 const draftSchema = z.object({
   customerName: z.string().min(1, "الاسم مطلوب").max(300, "حد أقصى 300 حرف"),
-  invoiceType: z.enum(["Sales", "Purchases"], { message: "اختر نوع الفاتورة" }),
+  invoiceType: z.enum(["Sales", "Purchases", "Returns"], { message: "اختر نوع الفاتورة" }),
   salesRepName: z
     .string()
     .min(1, "اسم المندوب مطلوب")

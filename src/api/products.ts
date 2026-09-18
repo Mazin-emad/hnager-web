@@ -1,5 +1,6 @@
 import { api } from "./client";
 import type {
+  BarnsCountFormulaResponse,
   CreateItemRequest,
   CreateProductRequest,
   ItemDetailResponse,
@@ -10,6 +11,7 @@ import type {
   SetProductVariablesRequest,
   UpdateItemRequest,
   UpdateProductRequest,
+  UpsertBarnsCountFormulaRequest,
   UpsertLinesCountFormulaRequest,
   UpsertQuantityFormulaRequest,
 } from "./types";
@@ -20,6 +22,7 @@ export const productKeys = {
   configuration: (id: string) => ["products", id, "configuration"] as const,
   quantityFormula: (id: string) => ["products", id, "quantity-formula"] as const,
   linesCountFormula: (id: string) => ["products", id, "lines-count-formula"] as const,
+  barnsCountFormula: (id: string) => ["products", id, "barns-count-formula"] as const,
   items: (productId: string, activeOnly: boolean) =>
     ["products", productId, "items", activeOnly] as const,
 };
@@ -102,6 +105,24 @@ export async function updateLinesCountFormula(
 ): Promise<LinesCountFormulaResponse> {
   const res = await api.put<LinesCountFormulaResponse>(
     `/api/v1/products/${id}/lines-count-formula`,
+    body,
+  );
+  return res.data;
+}
+
+/** Current barns-count (عدد العنابر) formula for the product settings page (prefill the editor). */
+export async function getBarnsCountFormula(id: string): Promise<BarnsCountFormulaResponse> {
+  const res = await api.get<BarnsCountFormulaResponse>(`/api/v1/products/${id}/barns-count-formula`);
+  return res.data;
+}
+
+/** Admin "Save formula" — returns the saved shape with bumped version on real change. */
+export async function updateBarnsCountFormula(
+  id: string,
+  body: UpsertBarnsCountFormulaRequest,
+): Promise<BarnsCountFormulaResponse> {
+  const res = await api.put<BarnsCountFormulaResponse>(
+    `/api/v1/products/${id}/barns-count-formula`,
     body,
   );
   return res.data;

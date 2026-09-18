@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
@@ -14,8 +14,9 @@ import {
   FileDown,
   PackagePlus,
   Pencil,
-  Receipt,
   Printer,
+  Receipt,
+  Share2,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,7 +35,13 @@ import {
 } from "@/api/invoices";
 import { getProductConfiguration, listProducts, productKeys } from "@/api/products";
 import { parseApiError } from "@/api/errors";
-import type { AddInvoiceProductRequest, InvoiceDetailResponse, InvoiceType } from "@/api/types";
+import type {
+  AddInvoiceProductRequest,
+  InvoiceDetailResponse,
+  InvoicePdfMode,
+  InvoiceType,
+} from "@/api/types";
+import { ShareInvoiceDialog } from "@/components/invoices/ShareInvoiceDialog";
 import { useAuth } from "@/auth/AuthContext";
 import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS, counterpartyLabel, counterpartyNameLabel } from "@/lib/labels";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum } from "@/lib/format";
@@ -79,7 +86,7 @@ import {
 
 const headerSchema = z.object({
   customerName: z.string().min(1, "الاسم مطلوب").max(300),
-  invoiceType: z.enum(["Sales", "Purchases"]),
+  invoiceType: z.enum(["Sales", "Purchases", "Returns"]),
   salesRepName: z.string().min(1, "اسم المندوب مطلوب").max(300),
   day: z.string().max(100).optional().or(z.literal("")),
   invoiceDate: z.string().min(1, "التاريخ مطلوب"),
@@ -456,13 +463,23 @@ function EditHeaderDialog({ invoice }: { invoice: InvoiceDetailResponse }) {
 export function InvoiceBuilderPage() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { hasPermission } = useAuth();
   const canDeleteInvoice = hasPermission("invoices:delete");
+  const canShare = hasPermission("invoices:share");
+  // Received (shared-with-you) invoices render read-only: the `received=1`
+  // query flag comes from the "الفواتير المرسلة لي" list. Backend re-checks
+  // every mutation — this gating is UX only.
+  const isReceivedView = searchParams.get("received") === "1";
+  const sharedOwner = searchParams.get("owner") ?? "";
+  const sharedAt = searchParams.get("sharedAt") ?? "";
+  const isReadOnly = isReceivedView;
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [pdfBusy, setPdfBusy] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState<InvoicePdfMode | null>(null);
   const [printBusy, setPrintBusy] = useState(false);
 
   const invoiceQuery = useQuery({
@@ -525,15 +542,17 @@ export function InvoiceBuilderPage() {
     },
   });
 
-  async function handlePdf(invoice: InvoiceDetailResponse) {
-    setPdfBusy(true);
+  async function handlePdf(invoice: InvoiceDetailResponse, mode: InvoicePdfMode = "Full") {
+    setPdfBusy(mode);
     try {
-      await downloadInvoicePdf(invoice.id, invoice.invoiceNumber);
-      toast.success("تم تنزيل ملف PDF");
+      await downloadInvoicePdf(invoice.id, invoice.invoiceNumber, mode);
+      toast.success(
+        mode === "WithoutItems" ? "تم تنزيل ملف PDF (بدون أصناف)" : "تم تنزيل ملف PDF",
+      );
     } catch (error) {
       toast.error(parseApiError(error).message);
     } finally {
-      setPdfBusy(false);
+      setPdfBusy(null);
     }
   }
 
@@ -643,14 +662,37 @@ export function InvoiceBuilderPage() {
             <Badge variant={isDraft ? "secondary" : "default"} className="text-sm">
               {INVOICE_STATUS_LABELS[invoice.status]}
             </Badge>
-            {isDraft && <AddProductDialog invoiceId={invoice.id} />}
+            {isReceivedView && (
+              <Badge variant="outline" className="text-sm">
+                مشتركة معك — عرض فقط
+              </Badge>
+            )}
+            {!isReadOnly && isDraft && <AddProductDialog invoiceId={invoice.id} />}
+            {!isReadOnly && canShare && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShareOpen(true)}
+              >
+                <Share2 className="size-4" />
+                مشاركة
+              </Button>
+            )}
             <Button
               variant="outline"
-              onClick={() => handlePdf(invoice)}
-              disabled={pdfBusy}
+              onClick={() => handlePdf(invoice, "Full")}
+              disabled={pdfBusy != null}
             >
               <FileDown className="size-4" />
-              {pdfBusy ? "جارٍ التجهيز…" : "PDF"}
+              {pdfBusy === "Full" ? "جارٍ التجهيز…" : "PDF كاملة"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handlePdf(invoice, "WithoutItems")}
+              disabled={pdfBusy != null}
+            >
+              <FileDown className="size-4" />
+              {pdfBusy === "WithoutItems" ? "جارٍ التجهيز…" : "PDF بدون أصناف"}
             </Button>
             <Button
               variant="outline"
@@ -660,7 +702,7 @@ export function InvoiceBuilderPage() {
               <Printer className="size-4" />
               {printBusy ? "جارٍ التجهيز…" : "طباعة"}
             </Button>
-            {canDeleteInvoice && (
+            {!isReadOnly && canDeleteInvoice && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -675,11 +717,32 @@ export function InvoiceBuilderPage() {
         }
       />
 
+      {isReceivedView && (
+        <Card className="mb-4 border-brand-200 bg-brand-50">
+          <CardContent className="flex flex-wrap items-center gap-2 py-4 text-sm">
+            <Badge variant="secondary">مشتركة معك</Badge>
+            <span className="text-muted-foreground">
+              هذه الفاتورة مشتركة معك للعرض فقط — لا يمكن تعديلها أو اعتمادها أو حذفها أو مشاركتها.
+            </span>
+            {sharedOwner && (
+              <span className="tnum text-xs text-muted-foreground" dir="ltr">
+                owner: {sharedOwner}
+              </span>
+            )}
+            {sharedAt && (
+              <span className="tnum text-xs text-muted-foreground">
+                استُلمت {fmtDateTime(sharedAt)}
+              </span>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Header card */}
       <Card className="mb-4">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg">بيانات الفاتورة</CardTitle>
-          {isDraft && <EditHeaderDialog invoice={invoice} />}
+          {!isReadOnly && isDraft && <EditHeaderDialog invoice={invoice} />}
         </CardHeader>
         <CardContent>
           <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -705,7 +768,7 @@ export function InvoiceBuilderPage() {
               <p className="tnum text-xl font-bold text-brand-950">{fmtMoney(invoice.grandTotal)}</p>
             </div>
           </div>
-          {isDraft && (
+          {!isReadOnly && isDraft && (
             <div className="mt-4 flex flex-wrap gap-2">
               <Button
                 variant="outline"
@@ -738,7 +801,7 @@ export function InvoiceBuilderPage() {
       {invoice.products.length === 0 ? (
         <EmptyState
           title="لا توجد منتجات بعد"
-          hint={isDraft ? "أضف أول منتج مع قيم المتغيرات ليتم حساب الأصناف تلقائيًا" : "هذه الفاتورة بلا بنود"}
+          hint={isReadOnly ? "هذه الفاتورة بلا بنود" : isDraft ? "أضف أول منتج مع قيم المتغيرات ليتم حساب الأصناف تلقائيًا" : "هذه الفاتورة بلا بنود"}
           icon={<Receipt className="size-6" />}
         />
       ) : (
@@ -750,30 +813,18 @@ export function InvoiceBuilderPage() {
                 <CardHeader className="flex flex-row items-center justify-between gap-2">
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <CardTitle className="text-base">{block.productNameSnapshot}</CardTitle>
-                    <Badge
-                      variant="secondary"
-                      className="tnum"
-                      title={
-                        block.productQuantityFormulaSnapshot
-                          ? `معادلة الكمية (v${block.productQuantityFormulaVersion}): ${block.productQuantityFormulaSnapshot}`
-                          : "لا توجد معادلة كمية — الكمية 1"
-                      }
-                    >
+                    {/* Render stored snapshot values only — never the *FormulaSnapshot texts. */}
+                    <Badge variant="secondary" className="tnum">
                       الكمية: {fmtNum(block.productQuantity)}
                     </Badge>
-                    <Badge
-                      variant="secondary"
-                      className="tnum"
-                      title={
-                        block.linesCountFormulaSnapshot
-                          ? `معادلة عدد الخطوط (v${block.linesCountFormulaVersion}): ${block.linesCountFormulaSnapshot}`
-                          : "لا توجد معادلة لعدد الخطوط"
-                      }
-                    >
+                    <Badge variant="secondary" className="tnum">
                       عدد الخطوط: {fmtNum(block.linesCount)}
                     </Badge>
+                    <Badge variant="secondary" className="tnum">
+                      عدد العنابر: {fmtNum(block.barnsCount)}
+                    </Badge>
                   </div>
-                  {isDraft && (
+                  {!isReadOnly && isDraft && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -804,7 +855,7 @@ export function InvoiceBuilderPage() {
                           <TableHead className="text-left">اجمالي العدد</TableHead>
                           <TableHead className="text-left" title="السعر المحسوم لنوع هذه الفاتورة: سعر البيع للمبيعات، وسعر الشراء للمشتريات">السعر</TableHead>
                           <TableHead className="text-left">السعر الإجمالي</TableHead>
-                          {isDraft && <TableHead className="w-24">الحالة</TableHead>}
+                          {!isReadOnly && isDraft && <TableHead className="w-24">الحالة</TableHead>}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -836,9 +887,8 @@ export function InvoiceBuilderPage() {
                               <TableCell className="tnum text-left font-semibold">
                                 {fmtMoney(item.totalPriceSnapshot)}
                               </TableCell>
-                              {isDraft && (
-                                <TableCell>
-                                  <Button
+                              {!isReadOnly && isDraft && (
+                                <TableCell>                                  <Button
                                     variant="ghost"
                                     size="sm"
                                     onClick={() =>
@@ -867,9 +917,13 @@ export function InvoiceBuilderPage() {
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button variant="outline" onClick={() => handlePdf(invoice)} disabled={pdfBusy}>
+        <Button variant="outline" onClick={() => handlePdf(invoice, "Full")} disabled={pdfBusy != null}>
           <Download className="size-4" />
-          {pdfBusy ? "جارٍ التجهيز…" : "تنزيل PDF"}
+          {pdfBusy === "Full" ? "جارٍ التجهيز…" : "تنزيل PDF كاملة"}
+        </Button>
+        <Button variant="outline" onClick={() => handlePdf(invoice, "WithoutItems")} disabled={pdfBusy != null}>
+          <Download className="size-4" />
+          {pdfBusy === "WithoutItems" ? "جارٍ التجهيز…" : "تنزيل PDF بدون أصناف"}
         </Button>
         <Button variant="outline" onClick={() => handlePrint(invoice)} disabled={printBusy}>
           <Printer className="size-4" />
@@ -906,6 +960,14 @@ export function InvoiceBuilderPage() {
         busy={deleteMutation.isPending}
         onConfirm={() => deleteMutation.mutate()}
       />
+      {!isReadOnly && (
+        <ShareInvoiceDialog
+          invoiceId={invoice.id}
+          invoiceNumber={invoice.invoiceNumber}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+        />
+      )}
     </div>
   );
 }

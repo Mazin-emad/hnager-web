@@ -12,7 +12,7 @@ import {
   validateFormula,
 } from "@/api/formulas";
 import { parseApiError } from "@/api/errors";
-import { LINES_COUNT_KEY, type AssignedProductVariable } from "@/api/types";
+import { BARNS_COUNT_KEY, LINES_COUNT_KEY, type AssignedProductVariable } from "@/api/types";
 import { useAuth } from "@/auth/AuthContext";
 import { ConfirmAction } from "@/components/common";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,7 @@ export function FormulaEditor({
   const [loadedFormulaId, setLoadedFormulaId] = useState<string | null>(null);
   const [samples, setSamples] = useState<Record<string, string>>({});
   const [linesCountSample, setLinesCountSample] = useState("");
+  const [barnsCountSample, setBarnsCountSample] = useState("");
   const [validation, setValidation] = useState<{ ok: boolean; message: string } | null>(null);
   const [evalResult, setEvalResult] = useState<number | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -92,8 +93,9 @@ export function FormulaEditor({
         const raw = (samples[v.variableId] ?? "").trim();
         if (raw !== "") sampleValues[v.key] = Number(raw);
       }
-      // Reserved server-side value — supply a trial number when testing.
+      // Reserved server-side values — supply trial numbers when testing.
       if (linesCountSample.trim() !== "") sampleValues[LINES_COUNT_KEY] = Number(linesCountSample);
+      if (barnsCountSample.trim() !== "") sampleValues[BARNS_COUNT_KEY] = Number(barnsCountSample);
       return evaluateFormula({ expression: expression.trim(), productId, sampleValues });
     },
     onSuccess: (res) => setEvalResult(res.result),
@@ -119,6 +121,8 @@ export function FormulaEditor({
       setLoadedFormulaId(null);
       setValidation(null);
       setEvalResult(null);
+      setLinesCountSample("");
+      setBarnsCountSample("");
       void queryClient.invalidateQueries({ queryKey: formulaKeys.detail(itemId) });
       onSaved?.();
     },
@@ -168,7 +172,8 @@ export function FormulaEditor({
         />
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            متغيرات المنتج + القيمة المحسوبة <code dir="ltr">LinesCount</code> (عدد الخطوط من الخادم).
+            متغيرات المنتج + القيمتان المحسوبتان <code dir="ltr">LinesCount</code> (عدد الخطوط من الخادم) و{" "}
+            <code dir="ltr">BarnsCount</code> (عدد العنابر من الخادم).
           </p>
           <div className="flex flex-wrap gap-1.5">
             {variableKeys.map((k) => (
@@ -183,7 +188,7 @@ export function FormulaEditor({
                 {k}
               </button>
             ))}
-            {/* Reserved server-side value — usable here, never in product formulas. */}
+            {/* Reserved server-side values — usable here, never in product formulas. */}
             <button
               key={LINES_COUNT_KEY}
               type="button"
@@ -193,6 +198,16 @@ export function FormulaEditor({
               title="عدد الخطوط المحسوب من الخادم — متاح في معادلات الأصناف فقط"
             >
               {LINES_COUNT_KEY}
+            </button>
+            <button
+              key={BARNS_COUNT_KEY}
+              type="button"
+              onClick={() => setExpression((e) => (e ? `${e} ${BARNS_COUNT_KEY}` : BARNS_COUNT_KEY))}
+              className="tnum rounded-md bg-clay-100 px-2 py-0.5 font-mono text-xs text-clay-700 hover:bg-clay-200"
+              dir="ltr"
+              title="عدد العنابر المحسوب من الخادم — متاح في معادلات الأصناف فقط"
+            >
+              {BARNS_COUNT_KEY}
             </button>
           </div>
         </div>
@@ -258,6 +273,23 @@ export function FormulaEditor({
                 placeholder="0"
                 value={linesCountSample}
                 onChange={(e) => setLinesCountSample(e.target.value)}
+                className="tnum text-left"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor={`sample-${BARNS_COUNT_KEY}`} className="text-xs">
+                عدد العنابر <code dir="ltr">BarnsCount</code>
+                <span className="text-muted-foreground"> (قيمة الخادم — للتجربة فقط)</span>
+              </Label>
+              <Input
+                id={`sample-${BARNS_COUNT_KEY}`}
+                type="number"
+                step="any"
+                inputMode="decimal"
+                dir="ltr"
+                placeholder="0"
+                value={barnsCountSample}
+                onChange={(e) => setBarnsCountSample(e.target.value)}
                 className="tnum text-left"
               />
             </div>

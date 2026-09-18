@@ -40,7 +40,7 @@ const CODE_MESSAGES: Record<string, string> = {
   "Item.NotFound": "الصنف غير موجود",
   "Item.ProductNotFound": "المنتج الأب غير موجود",
   "Item.PriceCannotBeNegative": "سعر البيع/الشراء لا يمكن أن يكون سالبًا",
-  "Item.InvalidQuantityMultiplier": "مضاعف الكمية غير صالح — اختر كمية المنتج أو عدد الخطوط",
+  "Item.InvalidQuantityMultiplier": "مضاعف الكمية غير صالح — اختر كمية المنتج أو عدد الخطوط أو عدد العنابر",
   "Item.PriceChangeNotAllowed": "لا تملك صلاحية تغيير أسعار الأصناف",
   "Formula.NotFound": "المعادلة غير موجودة",
   "Formula.ParseFailed": "تعذّر تحليل المعادلة",
@@ -53,6 +53,13 @@ const CODE_MESSAGES: Record<string, string> = {
   "Invoice.InvoiceProductNotFound": "بند المنتج غير موجود",
   "Invoice.InvoiceItemNotFound": "بند الصنف غير موجود",
   "Invoice.NumberGenerationFailed": "تعذّر توليد رقم الفاتورة",
+  "Invoice.DuplicateShare": "تمت مشاركة هذه الفاتورة مع هذا المستخدم من قبل",
+  "Invoice.ShareNotAllowed": "لا تملك صلاحية مشاركة هذه الفاتورة — المشاركة لمالك الفاتورة فقط",
+  "Invoice.ShareWithSelf": "لا يمكنك مشاركة الفاتورة مع نفسك",
+  "Invoice.RecipientNotFound": "المستخدم المستلم غير موجود — تحقق من المعرف",
+  "Invoice.RecipientInactive": "حساب المستخدم المستلم معطّل ولا يمكن المشاركة معه",
+  "Invoice.ShareNotFound": "هذه المشاركة غير موجودة",
+  "Invoice.InvalidPdfMode": "وضع PDF غير صالح",
 };
 
 export interface ParsedApiError {

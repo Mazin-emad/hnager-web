@@ -1,8 +1,9 @@
-import type { InvoiceStatus, InvoiceType } from "@/api/types";
+import type { InvoiceStatus, InvoiceType, QuantityMultiplier, ReceivedInvoicePeriod } from "@/api/types";
 
 export const INVOICE_TYPE_LABELS: Record<InvoiceType, string> = {
   Sales: "مبيعات",
   Purchases: "مشتريات",
+  Returns: "مرتجعات",
 };
 
 /**
@@ -22,6 +23,18 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   Draft: "مسودة",
   Finalized: "معتمدة",
   Cancelled: "ملغاة",
+};
+
+export const QUANTITY_MULTIPLIER_LABELS: Record<QuantityMultiplier, string> = {
+  ProductQuantity: "كمية المنتج",
+  LinesCount: "عدد الخطوط",
+  BarnsCount: "عدد العنابر",
+};
+
+export const RECEIVED_PERIOD_LABELS: Record<ReceivedInvoicePeriod, string> = {
+  Last24Hours: "آخر ٢٤ ساعة",
+  Last7Days: "آخر ٧ أيام",
+  Last30Days: "آخر ٣٠ يومًا",
 };
 
 /** API `day` values are English day names — map them for display. */
@@ -68,6 +81,8 @@ export const PERMISSION_LABELS: Record<string, string> = {
   "invoices:finalize": "اعتماد الفواتير",
   "invoices:pdf": "تصدير PDF للفواتير",
   "invoices:delete": "حذف الفواتير",
+  "invoices:share": "مشاركة الفواتير",
+  "invoices:received-read": "عرض الفواتير المرسلة لي",
 };
 
 export const KNOWN_PERMISSIONS = Object.keys(PERMISSION_LABELS);

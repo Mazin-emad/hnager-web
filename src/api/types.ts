@@ -2,7 +2,7 @@
 // JSON uses camelCase. Enums are serialized as strings.
 // Dates: DateOnly as YYYY-MM-DD, datetimes ISO-8601.
 
-export type InvoiceType = "Sales" | "Purchases";
+export type InvoiceType = "Sales" | "Purchases" | "Returns";
 export type InvoiceStatus = "Draft" | "Finalized" | "Cancelled";
 export type VariableType = "Number";
 
@@ -10,17 +10,20 @@ export type VariableType = "Number";
  * Item quantity multiplier — controls how an item's ceiling-rounded quantity
  * scales to the billable total: `totalQuantity = CEILING(raw) × multiplier`.
  * - `ProductQuantity`: multiply by the product quantity (default)
- * - `LinesCount`: multiply by the lines count
+ * - `LinesCount`: multiply by the lines count (عدد الخطوط)
+ * - `BarnsCount`: multiply by the barns count (عدد العنابر)
  * Serialized as strings over the wire.
  */
-export type QuantityMultiplier = "ProductQuantity" | "LinesCount";
+export type QuantityMultiplier = "ProductQuantity" | "LinesCount" | "BarnsCount";
 
 /**
- * Reserved, case-sensitive variable key computed server-side for item
+ * Reserved, case-sensitive variable keys computed server-side for item
  * formulas. Never assignable to a product variable and never accepted by
- * the product quantity/lines-count formula endpoints (400 there).
+ * the product quantity/lines-count/barns-count formula endpoints (400 there).
  */
 export const LINES_COUNT_KEY = "LinesCount";
+export const BARNS_COUNT_KEY = "BarnsCount";
+export const RESERVED_VARIABLE_KEYS = [LINES_COUNT_KEY, BARNS_COUNT_KEY] as const;
 
 // ── Auth ────────────────────────────────────────────────────────────────────
 
@@ -202,7 +205,7 @@ export interface ItemDetailResponse {
   purchasePrice: number;
   /**
    * Which value scales the ceiling-rounded item quantity to the billable
-   * total (`ProductQuantity` or `LinesCount`). Required on create/update.
+   * total (`ProductQuantity`, `LinesCount`, or `BarnsCount`). Required on create/update.
    */
   quantityMultiplier: QuantityMultiplier;
   isActive: boolean;
@@ -224,6 +227,10 @@ export interface ProductDetailResponse {
   linesCountExpression: string | null;
   /** 0 = never configured; increments on each real change. */
   linesCountFormulaVersion: number;
+  /** Barns-count (عدد العنابر) formula text; null = never configured (falls back to 1). */
+  barnsCountExpression: string | null;
+  /** 0 = never configured; increments on each real change. */
+  barnsCountFormulaVersion: number;
   variables: AssignedProductVariable[];
   items: ItemDetailResponse[];
 }
@@ -235,7 +242,7 @@ export interface CreateItemRequest {
   salesPrice: number;
   /** سعر الشراء — required, ≥ 0. */
   purchasePrice: number;
-  /** Required — must be "ProductQuantity" or "LinesCount" (omitting it is a 400). */
+  /** Required — must be "ProductQuantity", "LinesCount", or "BarnsCount" (omitting it is a 400). */
   quantityMultiplier: QuantityMultiplier;
   displayOrder: number;
 }
@@ -302,6 +309,20 @@ export interface LinesCountFormulaResponse {
 
 /** PUT /api/v1/products/{id}/lines-count-formula. May reference only assigned variables. */
 export interface UpsertLinesCountFormulaRequest {
+  expression: string;
+}
+
+// ── Product barns-count formula (backend-calculated barns count / عدد العنابر) ──
+
+/** GET /api/v1/products/{id}/barns-count-formula. expression null + version 0 = never configured. */
+export interface BarnsCountFormulaResponse {
+  productId: string;
+  expression: string | null;
+  version: number;
+}
+
+/** PUT /api/v1/products/{id}/barns-count-formula. May reference only assigned variables. */
+export interface UpsertBarnsCountFormulaRequest {
   expression: string;
 }
 
@@ -397,10 +418,16 @@ export interface InvoiceProductBlock {
   productQuantityFormulaVersion: number;
   /** Backend-evaluated LinesCountFormula(variable values). Read-only display. */
   linesCount: number;
-  /** Formula text used for this invoice; "" if none was set at the time. */
+  /** Formula text used for this invoice; "" if none was set at the time. NEVER display. */
   linesCountFormulaSnapshot: string;
   /** 0 if no formula was set at the time. */
   linesCountFormulaVersion: number;
+  /** Backend-evaluated BarnsCountFormula(variable values) — عدد العنابر. Read-only display. */
+  barnsCount: number;
+  /** Formula text used for this invoice; "" if none was set at the time. NEVER display. */
+  barnsCountFormulaSnapshot: string;
+  /** 0 if no formula was set at the time. */
+  barnsCountFormulaVersion: number;
   inputValues: InvoiceInputValue[];
   items: InvoiceItemSnapshot[];
 }
@@ -445,6 +472,58 @@ export interface AddInvoiceProductRequest {
   productId: string;
   inputValues: ProductInputValueRequest[];
 }
+
+// ── Invoice sharing + received invoices (الفواتير المرسلة لي) ───────────────
+
+export interface ShareInvoiceRequest {
+  sharedWithUserId: string;
+}
+
+export interface InvoiceShareResponse {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  sharedWithUserId: string;
+  sharedByUserId: string;
+  sharedAt: string;
+}
+
+export type ReceivedInvoicePeriod = "Last24Hours" | "Last7Days" | "Last30Days";
+
+export interface ReceivedInvoicesFilterRequest {
+  fromUserId?: string;
+  fromDate?: string;
+  toDate?: string;
+  period?: ReceivedInvoicePeriod;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface ReceivedInvoiceResponse {
+  shareId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  customerName: string;
+  invoiceType: InvoiceType;
+  salesRepName: string;
+  invoiceDate: string;
+  status: InvoiceStatus;
+  grandTotal: number;
+  ownerUserId: string;
+  sharedByUserId: string;
+  sharedAt: string;
+}
+
+export interface ReceivedInvoiceListResponse {
+  items: ReceivedInvoiceResponse[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+// ── Invoice PDF modes ─────────────────────────────────────────────────────
+
+export type InvoicePdfMode = "Full" | "WithoutItems";
 
 // ── Shared error shapes ─────────────────────────────────────────────────────
 

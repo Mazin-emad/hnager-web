@@ -4,13 +4,21 @@ import type {
   CreateInvoiceRequest,
   InvoiceDetailResponse,
   InvoiceFilters,
+  InvoicePdfMode,
+  InvoiceShareResponse,
   PagedInvoices,
+  ReceivedInvoiceListResponse,
+  ReceivedInvoicesFilterRequest,
+  ShareInvoiceRequest,
   UpdateInvoiceHeaderRequest,
 } from "./types";
 
 export const invoiceKeys = {
   list: (filters: InvoiceFilters) => ["invoices", filters] as const,
   detail: (id: string) => ["invoices", id] as const,
+  shares: (id: string) => ["invoices", id, "shares"] as const,
+  received: (filters: ReceivedInvoicesFilterRequest) =>
+    ["invoices", "received", filters] as const,
 };
 
 function toParams(filters: InvoiceFilters): Record<string, string | number> {
@@ -91,19 +99,77 @@ export async function deleteInvoice(id: string): Promise<void> {
 }
 
 /** Shared PDF fetch (blob) — used by both download and print so the API call isn't duplicated. */
-export async function fetchInvoicePdfBlob(id: string): Promise<Blob> {
-  const res = await api.get(`/api/v1/invoices/${id}/pdf`, { responseType: "blob" });
+export async function fetchInvoicePdfBlob(
+  id: string,
+  mode: InvoicePdfMode = "Full",
+): Promise<Blob> {
+  const res = await api.get(`/api/v1/invoices/${id}/pdf`, {
+    params: { mode },
+    responseType: "blob",
+  });
   return new Blob([res.data], { type: "application/pdf" });
 }
 
-export async function downloadInvoicePdf(id: string, invoiceNumber: string): Promise<void> {
-  const blob = await fetchInvoicePdfBlob(id);
+function pdfFileName(invoiceNumber: string, mode: InvoicePdfMode): string {
+  return mode === "WithoutItems" ? `${invoiceNumber}-summary.pdf` : `${invoiceNumber}.pdf`;
+}
+
+export async function downloadInvoicePdf(
+  id: string,
+  invoiceNumber: string,
+  mode: InvoicePdfMode = "Full",
+): Promise<void> {
+  const blob = await fetchInvoicePdfBlob(id, mode);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${invoiceNumber}.pdf`;
+  anchor.download = pdfFileName(invoiceNumber, mode);
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+/** Back-compat alias used by print paths — always the full invoice. */
+export async function getInvoicePdf(id: string, mode: InvoicePdfMode = "Full"): Promise<Blob> {
+  return fetchInvoicePdfBlob(id, mode);
+}
+
+// ── Sharing ─────────────────────────────────────────────────────────────────
+
+/** Share an invoice with another user. Owner (or Admin) only, any status. */
+export async function shareInvoice(
+  id: string,
+  body: ShareInvoiceRequest,
+): Promise<InvoiceShareResponse> {
+  const res = await api.post<InvoiceShareResponse>(`/api/v1/invoices/${id}/share`, body);
+  return res.data;
+}
+
+/** Revoke a share. Owner (or Admin) only. 204 empty body. */
+export async function unshareInvoice(id: string, sharedWithUserId: string): Promise<void> {
+  await api.delete(`/api/v1/invoices/${id}/share/${encodeURIComponent(sharedWithUserId)}`);
+}
+
+function toReceivedParams(
+  filters: ReceivedInvoicesFilterRequest,
+): Record<string, string | number> {
+  const params: Record<string, string | number> = {};
+  if (filters.fromUserId?.trim()) params.fromUserId = filters.fromUserId.trim();
+  if (filters.fromDate) params.fromDate = filters.fromDate;
+  if (filters.toDate) params.toDate = filters.toDate;
+  if (filters.period) params.period = filters.period;
+  params.page = filters.page ?? 1;
+  params.pageSize = filters.pageSize ?? 20;
+  return params;
+}
+
+/** Invoices shared with the current user. Filters apply to `sharedAt` (receipt time). */
+export async function getReceivedInvoices(
+  filters: ReceivedInvoicesFilterRequest,
+): Promise<ReceivedInvoiceListResponse> {
+  const res = await api.get<ReceivedInvoiceListResponse>("/api/v1/invoices/received", {
+    params: toReceivedParams(filters),
+  });
+  return res.data;
 }
