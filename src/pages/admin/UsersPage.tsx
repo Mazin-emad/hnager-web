@@ -53,7 +53,7 @@ const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 const userSchema = z.object({
   firstName: z.string().min(3, "3 أحرف على الأقل").max(100),
   lastName: z.string().min(3, "3 أحرف على الأقل").max(100),
-  email: z.string().min(1, "البريد مطلوب").email("بريد غير صالح"),
+  email: z.string().min(1, "البريد مطلوب"),
   password: z
     .string()
     .regex(PASSWORD_RULE, "8 أحرف على الأقل: كبير وصغير ورقم ورمز")
@@ -191,7 +191,7 @@ function UserDialog({
                 <FormItem>
                   <FormLabel>البريد الإلكتروني</FormLabel>
                   <FormControl>
-                    <Input {...field} type="email" dir="ltr" className="text-left" />
+                    <Input {...field} type="text" inputMode="email" dir="ltr" className="text-left" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
