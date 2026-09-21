@@ -536,7 +536,9 @@ export interface ReceivedInvoiceListResponse {
 
 // ── Invoice PDF modes ─────────────────────────────────────────────────────
 
-export type InvoicePdfMode = "Full" | "WithoutItems";
+// Full: complete invoice. WithoutItems: product summary, no items.
+// Factory (فاتورة مصنع): item names + total quantities only, no prices/totals.
+export type InvoicePdfMode = "Full" | "WithoutItems" | "Factory";
 
 // ── Shared error shapes ─────────────────────────────────────────────────────
 

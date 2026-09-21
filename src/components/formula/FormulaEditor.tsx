@@ -13,6 +13,7 @@ import {
 } from "@/api/formulas";
 import { parseApiError } from "@/api/errors";
 import { BARNS_COUNT_KEY, LINES_COUNT_KEY, type AssignedProductVariable } from "@/api/types";
+import { displayVariableName } from "@/lib/labels";
 import { useAuth } from "@/auth/AuthContext";
 import { ConfirmAction } from "@/components/common";
 import { Button } from "@/components/ui/button";
@@ -243,7 +244,7 @@ export function FormulaEditor({
             {variables.map((v) => (
               <div key={v.variableId} className="space-y-1">
                 <Label htmlFor={`sample-${v.variableId}`} className="text-xs">
-                  {v.name}
+                  {displayVariableName(v.name)}
                   {v.unit ? ` (${v.unit})` : ""}
                 </Label>
                 <Input

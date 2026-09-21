@@ -153,6 +153,17 @@ export function parseApiError(error: unknown): ParsedApiError {
         message: (code && CODE_MESSAGES[code]) || description || title || "فشلت العملية",
       };
     }
+    // RFC-7807 flat shape with a top-level `code` (e.g. PDF InvalidPdfMode
+    // returns { title, status, code } with no `errors` array).
+    if (typeof record.code === "string" && record.code) {
+      const code = record.code;
+      const title = typeof record.title === "string" ? record.title : "";
+      return {
+        status,
+        code,
+        message: CODE_MESSAGES[code] || title || "فشلت العملية",
+      };
+    }
     // FluentValidation: { errors: { field: [messages] } }
     if (record.errors != null && typeof record.errors === "object") {
       const fieldErrors = record.errors as Record<string, string[]>;

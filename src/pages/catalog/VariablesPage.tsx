@@ -16,6 +16,7 @@ import {
 } from "@/api/variables";
 import { parseApiError, getServerErrorDetail } from "@/api/errors";
 import { BARNS_COUNT_KEY, LINES_COUNT_KEY, type VariableResponse } from "@/api/types";
+import { displayVariableName } from "@/lib/labels";
 import { useAuth } from "@/auth/AuthContext";
 import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
 import { Badge } from "@/components/ui/badge";
@@ -305,7 +306,7 @@ export function VariablesPage() {
               <TableBody>
                 {variables.map((v) => (
                   <TableRow key={v.id}>
-                    <TableCell className="font-medium">{v.name}</TableCell>
+                    <TableCell className="font-medium">{displayVariableName(v.name)}</TableCell>
                     <TableCell>
                       <code className="tnum rounded bg-muted px-2 py-0.5 text-xs" dir="ltr">
                         {v.key}
@@ -373,7 +374,7 @@ export function VariablesPage() {
         title="حذف نهائي للمتغير؟"
         description={
           deleteTarget
-            ? `سيُحذف المتغير "${deleteTarget.name}" (${deleteTarget.key}) نهائيًا ولا يمكن التراجع عن ذلك. إذا كان مستخدمًا في منتجات أو معادلات أو فواتير سابقة، ستظهر رسالة توضح المطلوب — ويمكنك تعطيله بدلًا من حذفه.`
+            ? `سيُحذف المتغير "${displayVariableName(deleteTarget.name)}" (${deleteTarget.key}) نهائيًا ولا يمكن التراجع عن ذلك. إذا كان مستخدمًا في منتجات أو معادلات أو فواتير سابقة، ستظهر رسالة توضح المطلوب — ويمكنك تعطيله بدلًا من حذفه.`
             : undefined
         }
         confirmLabel="حذف نهائي"

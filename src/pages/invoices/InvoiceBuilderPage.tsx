@@ -43,7 +43,7 @@ import type {
 } from "@/api/types";
 import { ShareInvoiceDialog } from "@/components/invoices/ShareInvoiceDialog";
 import { useAuth } from "@/auth/AuthContext";
-import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS, counterpartyLabel, counterpartyNameLabel } from "@/lib/labels";
+import { INVOICE_STATUS_LABELS, INVOICE_TYPE_LABELS, WEEKDAY_LABELS, counterpartyLabel, counterpartyNameLabel, displayVariableName } from "@/lib/labels";
 import { displayUserName, useUserNameMap } from "@/lib/userNames";
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum } from "@/lib/format";
 import { ConfirmAction, EmptyState, ErrorCard, PageHeader, TableSkeleton } from "@/components/common";
@@ -173,7 +173,7 @@ function AddProductDialog({ invoiceId, rowVersion }: { invoiceId: string; rowVer
     if (!productId) return;
     const missing = variables.filter((v) => v.isRequired && (values[v.variableId] ?? "").trim() === "");
     if (missing.length > 0) {
-      toast.error(`أدخل القيم المطلوبة: ${missing.map((v) => v.name).join("، ")}`);
+      toast.error(`أدخل القيم المطلوبة: ${missing.map((v) => displayVariableName(v.name)).join("، ")}`);
       return;
     }
     const inputValues = variables
@@ -246,7 +246,7 @@ function AddProductDialog({ invoiceId, rowVersion }: { invoiceId: string; rowVer
           {variables.map((v) => (
             <div key={v.variableId} className="space-y-2">
               <Label htmlFor={`var-${v.variableId}`}>
-                {v.name}
+                {displayVariableName(v.name)}
                 {v.isRequired && <span className="text-destructive"> *</span>}
                 {v.unit && <span className="text-xs text-muted-foreground"> ({v.unit})</span>}
               </Label>
@@ -589,7 +589,11 @@ export function InvoiceBuilderPage() {
     try {
       await downloadInvoicePdf(invoice.id, invoice.invoiceNumber, mode);
       toast.success(
-        mode === "WithoutItems" ? "تم تنزيل ملف PDF (بدون أصناف)" : "تم تنزيل ملف PDF",
+        mode === "WithoutItems"
+          ? "تم تنزيل ملف PDF (بدون أصناف)"
+          : mode === "Factory"
+            ? "تم تنزيل ملف PDF (فاتورة مصنع)"
+            : "تم تنزيل ملف PDF",
       );
     } catch (error) {
       toast.error(parseApiError(error).message);
@@ -739,6 +743,14 @@ export function InvoiceBuilderPage() {
             >
               <FileDown className="size-4" />
               {pdfBusy === "WithoutItems" ? "جارٍ التجهيز…" : "PDF بدون أصناف"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handlePdf(invoice, "Factory")}
+              disabled={pdfBusy != null}
+            >
+              <FileDown className="size-4" />
+              {pdfBusy === "Factory" ? "جارٍ التجهيز…" : "فاتورة مصنع"}
             </Button>
             <Button
               variant="outline"
@@ -893,7 +905,7 @@ export function InvoiceBuilderPage() {
                     <div className="flex flex-wrap gap-2">
                       {block.inputValues.map((iv) => (
                         <Badge key={iv.variableKey} variant="outline" className="tnum" dir="ltr">
-                          {iv.variableKey}: {fmtNum(iv.value)}
+                          {displayVariableName(iv.variableName) === "عدد الخطوط" ? displayVariableName(iv.variableName) : displayVariableName(iv.variableKey)}: {fmtNum(iv.value)}
                         </Badge>
                       ))}
                     </div>
@@ -976,6 +988,10 @@ export function InvoiceBuilderPage() {
         <Button variant="outline" onClick={() => handlePdf(invoice, "WithoutItems")} disabled={pdfBusy != null}>
           <Download className="size-4" />
           {pdfBusy === "WithoutItems" ? "جارٍ التجهيز…" : "تنزيل PDF بدون أصناف"}
+        </Button>
+        <Button variant="outline" onClick={() => handlePdf(invoice, "Factory")} disabled={pdfBusy != null}>
+          <Download className="size-4" />
+          {pdfBusy === "Factory" ? "جارٍ التجهيز…" : "تنزيل فاتورة مصنع"}
         </Button>
         <Button variant="outline" onClick={() => handlePrint(invoice)} disabled={printBusy}>
           <Printer className="size-4" />

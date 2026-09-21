@@ -1,3 +1,4 @@
+import axios from "axios";
 import { api } from "./client";
 import type {
   AddInvoiceProductRequest,
@@ -140,15 +141,72 @@ export async function fetchInvoicePdfBlob(
   id: string,
   mode: InvoicePdfMode = "Full",
 ): Promise<Blob> {
-  const res = await api.get(`/api/v1/invoices/${id}/pdf`, {
-    params: { mode },
-    responseType: "blob",
-  });
-  return new Blob([res.data], { type: "application/pdf" });
+  return (await fetchInvoicePdf(id, mode)).blob;
+}
+
+interface FetchedInvoicePdf {
+  blob: Blob;
+  /** Filename from the `Content-Disposition` response header, when present. */
+  serverFileName: string | null;
+}
+
+async function fetchInvoicePdf(id: string, mode: InvoicePdfMode): Promise<FetchedInvoicePdf> {
+  let res;
+  try {
+    res = await api.get<Blob>(`/api/v1/invoices/${id}/pdf`, {
+      params: { mode },
+      responseType: "blob",
+    });
+  } catch (error) {
+    throw await withParsedBlobError(error);
+  }
+  return {
+    blob: new Blob([res.data], { type: "application/pdf" }),
+    serverFileName: parseContentDispositionFileName(res.headers?.["content-disposition"]),
+  };
+}
+
+/**
+ * Parses `attachment; filename=...` / `filename*=UTF-8''...` (RFC 5987).
+ * Returns null when absent or unparseable (caller falls back to the pattern).
+ */
+function parseContentDispositionFileName(header: unknown): string | null {
+  if (typeof header !== "string" || !header) return null;
+  const match = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(header);
+  if (!match) return null;
+  const raw = match[1].trim();
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/**
+ * PDF failures arrive as `application/problem+json` inside a Blob
+ * (responseType: 'blob'), which parseApiError() can't read. Swap the parsed
+ * JSON back onto the response so toasts show the mapped Arabic message
+ * (e.g. 400 Invoice.InvalidPdfMode) instead of a generic failure.
+ */
+async function withParsedBlobError(error: unknown): Promise<unknown> {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data;
+    if (data instanceof Blob) {
+      try {
+        const text = await data.text();
+        if (text && error.response) error.response.data = JSON.parse(text);
+      } catch {
+        // Keep the raw blob — parseApiError() falls back to a generic message.
+      }
+    }
+  }
+  return error;
 }
 
 function pdfFileName(invoiceNumber: string, mode: InvoicePdfMode): string {
-  return mode === "WithoutItems" ? `${invoiceNumber}-summary.pdf` : `${invoiceNumber}.pdf`;
+  const suffix =
+    mode === "Factory" ? "-factory" : mode === "WithoutItems" ? "-summary" : "";
+  return `${invoiceNumber}${suffix}.pdf`;
 }
 
 export async function downloadInvoicePdf(
@@ -156,11 +214,12 @@ export async function downloadInvoicePdf(
   invoiceNumber: string,
   mode: InvoicePdfMode = "Full",
 ): Promise<void> {
-  const blob = await fetchInvoicePdfBlob(id, mode);
+  const { blob, serverFileName } = await fetchInvoicePdf(id, mode);
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = pdfFileName(invoiceNumber, mode);
+  // Prefer the server filename (Content-Disposition); fall back to the pattern.
+  anchor.download = serverFileName ?? pdfFileName(invoiceNumber, mode);
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();

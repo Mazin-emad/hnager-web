@@ -77,7 +77,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fmtMoney } from "@/lib/format";
-import { QUANTITY_MULTIPLIER_LABELS } from "@/lib/labels";
+import { QUANTITY_MULTIPLIER_LABELS, displayVariableName } from "@/lib/labels";
 
 const itemSchema = z.object({
   name: z.string().min(1, "الاسم مطلوب").max(200),
@@ -530,7 +530,7 @@ export function ProductDetailPage() {
                   {index + 1}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{v.name}</p>
+                  <p className="font-medium">{displayVariableName(v.name)}</p>
                   <p className="tnum text-xs text-muted-foreground" dir="ltr">
                     {v.key}
                     {v.unit ? ` · ${v.unit}` : ""}
@@ -621,7 +621,7 @@ export function ProductDetailPage() {
                 <SelectContent>
                   {unassigned.map((v) => (
                     <SelectItem key={v.id} value={v.id}>
-                      {v.name} ({v.key})
+                      {displayVariableName(v.name)} ({v.key})
                     </SelectItem>
                   ))}
                 </SelectContent>

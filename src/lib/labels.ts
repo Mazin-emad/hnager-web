@@ -31,6 +31,16 @@ export const QUANTITY_MULTIPLIER_LABELS: Record<QuantityMultiplier, string> = {
   BarnsCount: "عدد العنابر",
 };
 
+/**
+ * UI-only display rename: the catalog variable still stored as "عرض العنبر"
+ * (same id/key/binding/value) must read "عدد الخطوط" everywhere its label
+ * is rendered (add-product dialog, invoice detail, edit forms, etc.).
+ * Keys/ids/payloads are never remapped — only human-readable labels.
+ */
+export function displayVariableName(name: string): string {
+  return name.trim() === "عرض العنبر" ? "عدد الخطوط" : name;
+}
+
 export const RECEIVED_PERIOD_LABELS: Record<ReceivedInvoicePeriod, string> = {
   Last24Hours: "آخر ٢٤ ساعة",
   Last7Days: "آخر ٧ أيام",
