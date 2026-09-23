@@ -144,8 +144,16 @@ function AddProductDialog({ invoiceId, rowVersion }: { invoiceId: string; rowVer
     // Locked to the API contract: AddInvoiceProductRequest requires
     // { productId, inputValues: [{ variableKey, value }] } — omitting
     // inputValues is a type error, not a silent runtime drop.
+    // The version is read live from the cache at fire time, not from the
+    // render-time `rowVersion` prop: every invoice mutation bumps it
+    // server-side, so a prop captured before e.g. a toggle is already stale.
     mutationFn: (body: AddInvoiceProductRequest) =>
-      addInvoiceProduct(invoiceId, body, rowVersion),
+      addInvoiceProduct(
+        invoiceId,
+        body,
+        queryClient.getQueryData<InvoiceDetailResponse>(invoiceKeys.detail(invoiceId))?.rowVersion ??
+          rowVersion,
+      ),
     onSuccess: (updated) => {
       toast.success("تمت إضافة المنتج");
       setOpen(false);
@@ -306,7 +314,11 @@ function EditHeaderDialog({ invoice }: { invoice: InvoiceDetailResponse }) {
         invoiceDate: values.invoiceDate,
         discountPercent: values.discountPercent,
         notes: values.notes?.trim() ? values.notes : null,
-      }, invoice.rowVersion),
+      },
+      // Live from the cache at fire time — the `invoice` prop is render-time
+      // and may be one mutation behind (same stale-If-Match class as add).
+      queryClient.getQueryData<InvoiceDetailResponse>(invoiceKeys.detail(invoice.id))?.rowVersion ??
+        invoice.rowVersion),
     onSuccess: (updated) => {
       const typeChanged = updated.invoiceType !== invoice.invoiceType;
       // The backend re-prices every line from current catalog pricing when
@@ -533,17 +545,25 @@ export function InvoiceBuilderPage() {
   const excludeMutation = useMutation({
     mutationFn: ({ productId, itemId }: { productId: string; itemId: string }) =>
       toggleInvoiceItemExcluded(id, productId, itemId, latestRowVersion()),
-    onSuccess: () => void invalidate(),
+    // The toggle endpoint returns 204 with no body, so the ONLY way to learn
+    // the server-bumped rowVersion is to refetch — and it must be awaited:
+    // firing the next mutation (e.g. recalculate) before the refetch lands
+    // sends the old If-Match and eats a self-inflicted 409 every time.
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
+    },
     onError: mutationError,
   });
 
   const removeMutation = useMutation({
     mutationFn: (invoiceProductId: string) =>
       removeInvoiceProduct(id, invoiceProductId, latestRowVersion()),
-    onSuccess: () => {
+    // Same 204-no-body shape as toggle: await the refetch so the cached
+    // rowVersion is fresh before any subsequent mutation can fire.
+    onSuccess: async () => {
       toast.success("تم حذف المنتج من الفاتورة");
       setRemoveTarget(null);
-      void invalidate();
+      await queryClient.invalidateQueries({ queryKey: invoiceKeys.detail(id) });
     },
     onError: mutationError,
   });
@@ -583,6 +603,21 @@ export function InvoiceBuilderPage() {
       toast.error(parseApiError(error).message);
     },
   });
+
+  /**
+   * True while the cached detail may hold a stale `rowVersion`: any invoice
+   * mutation in flight, or a detail refetch still landing. Every
+   * invoice-mutating button gates on this — a second mutation fired in this
+   * window would send the old `If-Match` and eat a self-inflicted 409
+   * (indistinguishable server-side from a real conflict).
+   */
+  const invoiceSyncing =
+    invoiceQuery.isFetching ||
+    excludeMutation.isPending ||
+    removeMutation.isPending ||
+    recalcMutation.isPending ||
+    finalizeMutation.isPending ||
+    deleteMutation.isPending;
 
   async function handlePdf(invoice: InvoiceDetailResponse, mode: InvoicePdfMode = "Full") {
     setPdfBusy(mode);
@@ -767,6 +802,7 @@ export function InvoiceBuilderPage() {
                 size="sm"
                 className="text-destructive hover:text-destructive"
                 onClick={() => setDeleteOpen(true)}
+                disabled={invoiceSyncing}
               >
                 <Trash2 className="size-4" />
                 حذف الفاتورة
@@ -837,14 +873,14 @@ export function InvoiceBuilderPage() {
               <Button
                 variant="outline"
                 onClick={() => recalcMutation.mutate()}
-                disabled={recalcMutation.isPending}
+                disabled={invoiceSyncing}
               >
                 <Calculator className="size-4" />
                 {recalcMutation.isPending ? "جارٍ الحساب…" : "إعادة حساب"}
               </Button>
               <Button
                 onClick={() => setFinalizeOpen(true)}
-                disabled={!canFinalize}
+                disabled={!canFinalize || invoiceSyncing}
                 className="bg-brand-800 hover:bg-brand-900"
                 title={included === 0 ? "أضف صنفًا واحدًا على الأقل قبل الاعتماد" : undefined}
               >
@@ -952,9 +988,11 @@ export function InvoiceBuilderPage() {
                                 {fmtMoney(item.totalPriceSnapshot)}
                               </TableCell>
                               {isDraft && (
-                                <TableCell>                                  <Button
+                                <TableCell>
+                                  <Button
                                     variant="ghost"
                                     size="sm"
+                                    disabled={invoiceSyncing}
                                     onClick={() =>
                                       excludeMutation.mutate({ productId: block.id, itemId: item.id })
                                     }
@@ -1005,7 +1043,7 @@ export function InvoiceBuilderPage() {
         title="اعتماد الفاتورة؟"
         description="بعد الاعتماد لا يمكن تعديل الفاتورة نهائيًا."
         confirmLabel="اعتماد"
-        busy={finalizeMutation.isPending}
+        busy={invoiceSyncing}
         onConfirm={() => finalizeMutation.mutate()}
       />
       <ConfirmAction
@@ -1015,7 +1053,7 @@ export function InvoiceBuilderPage() {
         description="سيُحذف البند وتُعاد حساب الإجماليات."
         confirmLabel="حذف"
         danger
-        busy={removeMutation.isPending}
+        busy={invoiceSyncing}
         onConfirm={() => removeTarget && removeMutation.mutate(removeTarget)}
       />
       {!isReceivedView && (
@@ -1026,7 +1064,7 @@ export function InvoiceBuilderPage() {
           description="سيُحذف الفاتورة نهائيًا بجميع بنودها (حذف نهائي) — الحذف متاح بأي حالة بما فيها المعتمدة."
           confirmLabel="حذف"
           danger
-          busy={deleteMutation.isPending}
+          busy={invoiceSyncing}
           onConfirm={() => deleteMutation.mutate()}
         />
       )}
